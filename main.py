@@ -220,8 +220,38 @@ def print_messages():
         print("----------- Messages -----------")
     for mensagem in reverse_list(mensagens):
         name = f"{nome_remetente}: " if mensagem["user_id"] == id_remetente else "Tu: "
-        texto = f"{mensagem['text'] if mensagem['item_type'] == 'text' else mensagem['item_type']}"
-        # print(mensagem["timestamp"])
+        texto = ""
+        if mensagem['item_type'] == 'text':
+            texto = f"{mensagem['text']}"
+
+        elif mensagem['item_type'] == 'media':
+            if mensagem['media']['media_type'] == 1:
+                texto = f"Photo: {mensagem['media']['image_versions2']['candidates'][0]['url']}"
+            elif mensagem['media']['media_type'] == 2:
+                texto = f"Video: {mensagem['media']['video_versions'][0]['url']}"
+
+        elif mensagem['item_type'] == 'media_share':
+            try:
+                texto = f"Post share from {mensagem['media_share']['user']['username']} (A.K.A {mensagem['media_share']['user']['full_name']}): https://instagram.com/p/{mensagem['media_share']['code']}/"
+            except KeyError:
+                texto = f"Post share: Unable to get post"
+
+        elif mensagem['item_type'] == 'voice_media':
+            texto = f"Voice message: {mensagem['voice_media']['media']['audio']['audio_src']}"
+
+        elif mensagem['item_type'] == 'raven_media':
+            if mensagem['visual_media']['media']['media_type'] == 1:
+                try:
+                    texto = f"Temporary photo: {mensagem['visual_media']['media']['image_versions2']['candidates'][0]['url']} (Might not work because might have expired already)"
+                except KeyError:
+                    texto = f"Temporary photo: Unable to fetch (Probably expired already)"
+            elif mensagem['visual_media']['media']['media_type'] == 2:
+                try:
+                    texto = f"Temporary video: {mensagem['visual_media']['media']['video_versions'][0]['url']} (Might not work because might have expired already)"
+                except KeyError:
+                    texto = f"Temporary video: Unable to fetch (Probably expired already)"
+        else:
+            texto = mensagem['item_type']
         timestamp_unix = float(mensagem["timestamp"]) / 1000000
         timestamp = datetime.fromtimestamp(timestamp_unix)
         if verbose and file_path is None or not verbose and file_path is None:

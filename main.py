@@ -40,7 +40,7 @@ def force_exit():
     """
     global isWaiting
     isWaiting = False
-    print(colored("Program exit before time... Printing fetched messages...", "red"))
+    print(colored(f"Program exit before time... Printing fetched messages... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
     print_messages()
 
 
@@ -109,20 +109,20 @@ def getAllMessages(thread):
                 if limit_date > msg_timestamp:
                     passed_limit_date = True
                     if verbose:
-                        print(colored("[X] Message timestamp is older than given limit. Canceling checks..."))
+                        print(colored(f"[X] Message timestamp is older than given limit. Canceling checks... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]"))
                     break
 
             for mensagem in mensagens:
                 if temp_message["item_id"] == mensagem["item_id"]:
                     Exists = True
                     if verbose:
-                        print(colored("[X] Repeated message... Moving on...", "red"))
+                        print(colored(f"[X] Repeated message... Moving on... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
                     break
             if Exists:
                 break
             to_add.append(temp_message)
             if verbose:
-                print(colored("[V] Message is valid. Moving to next message...", "green"))
+                print(colored(f"[V] Message is valid. Moving to next message... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "green"))
 
         mensagens.extend(to_add)
         if hasPrevCursor(current_cursor) and not passed_limit_date:
@@ -238,13 +238,14 @@ def waiting():
     global seconds
     i = 0
     while isWaiting:
-        os.system("cls" if os.name == "nt" else "clear")
         seconds += 1
-        print(f"Fetching messages{'.' * i} {seconds}s")
-        if i < 3:
-            i += 1
-        else:
-            i = 0
+        if not verbose:
+            os.system("cls" if os.name == "nt" else "clear")
+            print(f"Fetching messages{'.' * i} {seconds}s")
+            if i < 3:
+                i += 1
+            else:
+                i = 0
         time.sleep(1)
 
 if __name__ == '__main__':
@@ -273,9 +274,8 @@ if __name__ == '__main__':
     if verbose:
         print("Fetching messages...")
         print("----------- Verbose -----------")
-    else:
-        x = threading.Thread(target=waiting)
-        x.start()
+    x = threading.Thread(target=waiting)
+    x.start()
     try:
         start()
     except Exception as e:

@@ -10,4 +10,11 @@ This little script scrapes every private message with any user. You can either j
 - Next, you need the sessionid of the account you're trying to scrape from
 - Once you have all that, just following the script's steps should get you where you need
 
-## To be continued...
+## Features
+- See all DMs the user has
+- Fetch all messages from any DM chat
+- Fetch only messages more recent that specified date (optional)
+- Export fetched messages to text file
+
+## What's the sessionid?
+The sessionid is a cookie that the Instagram website stores in your browser when there's an account logged in it. Everytime the user logs out and logins again the sessionid changes

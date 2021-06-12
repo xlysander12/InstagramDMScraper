@@ -22,7 +22,7 @@ headers = {
 
 sessionid = None
 threadid = None
-logging = False
+verbose = False
 file_path = None
 prevCursor = ""
 oldestCursor = ""
@@ -102,21 +102,27 @@ def getAllMessages(thread):
 
         # Check if message is behind limit_date
         for temp_message in temp_messages:
+            if verbose:
+                print(colored(f"[-] Checking message with id {temp_message['item_id']}", 'yellow'))
             if limit_date is not None and limit_date != "":
                 msg_timestamp = datetime.fromtimestamp(temp_message["timestamp"] / 1000000)
                 if limit_date > msg_timestamp:
                     passed_limit_date = True
+                    if verbose:
+                        print(colored("[X] Message timestamp is older than given limit. Canceling checks..."))
                     break
 
             for mensagem in mensagens:
                 if temp_message["item_id"] == mensagem["item_id"]:
                     Exists = True
-                if logging:
-                    print("Repeted message found.... Rolling over it...")
+                if verbose:
+                    print(colored("[X] Repeated message... Moving on...", "red"))
                     break
             if Exists:
                 break
             to_add.append(temp_message)
+            if verbose:
+                print(colored("[V] Message is valid. Moving to next message...", "green"))
 
         mensagens.extend(to_add)
         if hasPrevCursor(current_cursor) and not passed_limit_date:
@@ -189,7 +195,7 @@ def start2():
 
             oldestCursor = rjson["thread"]["oldest_cursor"]
             prevCursor = rjson["thread"]["prev_cursor"]
-    if enable_logging: print("----------------------------")
+    if enable_verbose: print("----------------------------")
     print_messages()
 
 # def print_messages():
@@ -206,20 +212,23 @@ def print_messages():
     """
     Function called to print and export all fetched messages
     """
+    global isWaiting
+    isWaiting = False
+    if not verbose:
+        os.system("cls" if os.name == "nt" else "clear")
+    else:
+        print("----------- Messages -----------")
     for mensagem in reverse_list(mensagens):
-        name = f"{colored(nome_remetente, 'green')}: " if mensagem["user_id"] == id_remetente else colored("Tu: ", 'yellow')
+        name = f"{nome_remetente}: " if mensagem["user_id"] == id_remetente else "Tu: "
         texto = f"{mensagem['text'] if mensagem['item_type'] == 'text' else mensagem['item_type']}"
         # print(mensagem["timestamp"])
         timestamp_unix = float(mensagem["timestamp"]) / 1000000
         timestamp = datetime.fromtimestamp(timestamp_unix)
-        global isWaiting
-        isWaiting = False
-        os.system("cls" if os.name == "nt" else "clear")
-        if logging and file_path is None or not logging and file_path is None:
+        if verbose and file_path is None or not verbose and file_path is None:
             print(f"{name}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
         if file_path is not None:
             with open(file_path, 'a+', encoding="UTF-8") as f:
-                f.write(f"{name}{texto} [{timestamp.strftime('%d/%m/Y @ %H:%M:%S')}]\n")
+                f.write(f"{colored(name, 'yellow')}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n")
                 f.close()
 
 def waiting():
@@ -231,7 +240,7 @@ def waiting():
     while isWaiting:
         os.system("cls" if os.name == "nt" else "clear")
         seconds += 1
-        print(f"Fetching messages{'.' * i}")
+        print(f"Fetching messages{'.' * i} {seconds}s")
         if i < 3:
             i += 1
         else:
@@ -246,8 +255,8 @@ if __name__ == '__main__':
         getThreads()
 
     threadid = input("Chat's Threadid: ")
-    enable_logging = input("Logging (y/N): ")
-    if enable_logging == "y": logging = True
+    enable_verbose = input("Logging (y/N): ")
+    if enable_verbose == "y": verbose = True
 
     enable_export = input("Export to file (y/N): ")
     if enable_export == "y":
@@ -261,10 +270,12 @@ if __name__ == '__main__':
             limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y %H:%M:%S")
         else:
             limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y")
-    if logging:
-        print("----------- Logs -----------")
-    x = threading.Thread(target=waiting)
-    x.start()
+    if verbose:
+        print("Fetching messages...")
+        print("----------- Verbose -----------")
+    else:
+        x = threading.Thread(target=waiting)
+        x.start()
     try:
         start()
     except Exception as e:

@@ -115,8 +115,8 @@ def getAllMessages(thread):
             for mensagem in mensagens:
                 if temp_message["item_id"] == mensagem["item_id"]:
                     Exists = True
-                if verbose:
-                    print(colored("[X] Repeated message... Moving on...", "red"))
+                    if verbose:
+                        print(colored("[X] Repeated message... Moving on...", "red"))
                     break
             if Exists:
                 break

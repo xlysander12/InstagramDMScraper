@@ -225,28 +225,31 @@ def print_messages():
         timestamp_unix = float(mensagem["timestamp"]) / 1000000
         timestamp = datetime.fromtimestamp(timestamp_unix)
         if verbose and file_path is None or not verbose and file_path is None:
-            print(f"{name}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
+            print(f"{colored(name, 'yellow')}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
         if file_path is not None:
             with open(file_path, 'a+', encoding="UTF-8") as f:
-                f.write(f"{colored(name, 'yellow')}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n")
+                f.write(f"{name}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n")
                 f.close()
 
 def waiting():
     """
     Thread to keep the "Fetching" text fancy
     """
-    global seconds
-    i = 0
-    while isWaiting:
-        seconds += 1
-        if not verbose:
-            os.system("cls" if os.name == "nt" else "clear")
-            print(f"Fetching messages{'.' * i}{' ' * (4-i)}({seconds}s)")
-            if i < 3:
-                i += 1
-            else:
-                i = 0
-        time.sleep(1)
+    try:
+        global seconds
+        i = 0
+        while isWaiting:
+            seconds += 1
+            if not verbose:
+                os.system("cls" if os.name == "nt" else "clear")
+                print(f"Fetching messages{'.' * i}{' ' * (4-i)}({seconds}s)")
+                if i < 3:
+                    i += 1
+                else:
+                    i = 0
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == '__main__':
     # signal.signal(signal.SIGINT, signal_handler)

@@ -241,7 +241,7 @@ def waiting():
         seconds += 1
         if not verbose:
             os.system("cls" if os.name == "nt" else "clear")
-            print(f"Fetching messages{'.' * i} {seconds}s")
+            print(f"Fetching messages{'.' * i}{' ' * (4-i)}({seconds}s)")
             if i < 3:
                 i += 1
             else:

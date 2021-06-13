@@ -29,7 +29,7 @@ oldestCursor = ""
 used_cursors: list = list()
 mensagens: list = list()
 isWaiting = True
-nome_remetente = None
+members: dict = dict()
 id_remetente = None
 seconds = 0
 limit_date = None
@@ -39,9 +39,12 @@ def force_exit():
     Called when the program is abruptely terminated (Like an exception or CTRL+C)
     """
     global isWaiting
-    isWaiting = False
     print(colored(f"Program exit before time... Printing fetched messages... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
-    print_messages()
+    if isWaiting:
+        isWaiting = False
+        print_messages()
+
+
 
 
 def reverse_list(target_list):
@@ -136,12 +139,13 @@ def start():
     Where everything starts... duh
     """
     global id_remetente
-    global nome_remetente
+    global members
     global mensagens
     resposta = requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor=", headers=headers, cookies={"sessionid": sessionid})
     thread = (resposta.json())["thread"]
     id_remetente = thread["users"][0]["pk"]
-    nome_remetente = (thread["users"][0]["full_name"]).split(" ")[0]
+    for user in thread["users"]:
+        members[user["pk"]] = user["full_name"].split(" ")[0]
     mensagens = [thread["items"][0]]
     getAllMessages(thread)
     # mensagens: list = reverse_list(thread["items"])
@@ -150,15 +154,16 @@ def start():
 
 def getThreads():
     """
-    Get a list of all chats the user from entered sessionid has (only dm's, groups are not yet supported)
+    Get a list of all chats the user from entered sessionid has
     """
     r = requests.get("https://i.instagram.com/api/v1/direct_v2/inbox/?persistentBadging=true&folder=&thread_message_limit=1", headers=headers, cookies={"sessionid": sessionid})
     threads = r.json()["inbox"]["threads"]
     threads_dict: dict = dict()
     for thread in threads:
         if thread["is_group"]:
-            continue
-        name: str = thread["users"][0]["full_name"]
+            name: str = thread['thread_title']
+        else:
+            name: str = thread["users"][0]["full_name"]
         id = thread["thread_id"]
         threads_dict[id] = name
     for thread in threads_dict:
@@ -219,7 +224,7 @@ def print_messages():
     else:
         print("----------- Messages -----------")
     for mensagem in reverse_list(mensagens):
-        name = f"{nome_remetente}: " if mensagem["user_id"] == id_remetente else "Tu: "
+        name = f"{members[mensagem['user_id']]}: " if mensagem["user_id"] in members else "Tu: "
         texto = ""
         if mensagem['item_type'] == 'text':
             texto = f"{mensagem['text']}"

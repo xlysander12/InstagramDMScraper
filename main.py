@@ -33,6 +33,7 @@ members: dict = dict()
 id_remetente = None
 seconds = 0
 limit_date = None
+requests_ammount = 0
 
 def force_exit():
     """
@@ -61,7 +62,10 @@ def getMessages(cursor):
     :param cursor:
     :return:
     """
-    return requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid}).json()["thread"]["items"]
+    answer = requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid}).json()["thread"]["items"]
+    global requests_ammount
+    requests_ammount += 1
+    return answer
 
 def hasPrevCursor(cursor):
     """
@@ -69,7 +73,10 @@ def hasPrevCursor(cursor):
     :param cursor:
     :return:
     """
-    return bool(requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid}).json()["thread"]["has_older"])
+    answer = bool(requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid}).json()["thread"]["has_older"])
+    global requests_ammount
+    requests_ammount += 1
+    return answer
 
 def getPrevCursor(cursor):
     """
@@ -79,10 +86,14 @@ def getPrevCursor(cursor):
     """
     try:
         r = requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid})
+        global requests_ammount
+        requests_ammount += 1
         json = r.json()
         return json["thread"]["prev_cursor"]
     except KeyError:
         r = requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid})
+        global requests_ammount
+        requests_ammount += 1
         json = r.json()
         try:
             return json["thread"]["oldest_cursor"]
@@ -141,7 +152,9 @@ def start():
     global id_remetente
     global members
     global mensagens
+    global requests_ammount
     resposta = requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor=", headers=headers, cookies={"sessionid": sessionid})
+    requests_ammount += 1
     thread = (resposta.json())["thread"]
     id_remetente = thread["users"][0]["pk"]
     for user in thread["users"]:
@@ -157,6 +170,8 @@ def getThreads():
     Get a list of all chats the user from entered sessionid has
     """
     r = requests.get("https://i.instagram.com/api/v1/direct_v2/inbox/?persistentBadging=true&folder=&thread_message_limit=1", headers=headers, cookies={"sessionid": sessionid})
+    global requests_ammount
+    requests_ammount += 1
     threads = r.json()["inbox"]["threads"]
     threads_dict: dict = dict()
     for thread in threads:
@@ -324,10 +339,10 @@ if __name__ == '__main__':
     minutes = int((seconds / 60) % 60)
     seconds2 = int(seconds % 60)
     if hours == 0 and minutes == 0:
-        print(f"All messages fetched! A total of {len(mensagens)} messages were fetched in {seconds2} {'seconds' if seconds2 != 1 else 'second'}")
+        print(f"All messages fetched! A total of {len(mensagens)} messages were fetched in {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
     elif hours == 0 and minutes != 0:
-        print(f"All messages fetched! A total of {len(mensagens)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'}")
+        print(f"All messages fetched! A total of {len(mensagens)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
     else:
-        print(f"All messages fetched! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'}")
+        print(f"All messages fetched! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
 
     # start2()

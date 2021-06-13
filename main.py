@@ -1,13 +1,11 @@
-import sys
 import os
+import threading
+import time
 import traceback
+from datetime import datetime
 
 import requests
-from datetime import datetime
-import time
-import threading
 from termcolor import colored
-
 
 headers = {
 	"accept": "*/*",
@@ -30,7 +28,6 @@ used_cursors: list = list()
 mensagens: list = list()
 isWaiting = True
 members: dict = dict()
-id_remetente = None
 seconds = 0
 limit_date = None
 requests_ammount = 0
@@ -46,7 +43,19 @@ def force_exit():
         print_messages()
 
 
+def rate_limit():
+    global isWaiting
+    isWaiting = False
+    raise RuntimeError("You're being rate-limited")
 
+
+def get_request(url: str, headers: dict, cookies: dict):
+    r = requests.get(url, headers=headers, cookies=cookies)
+    global requests_ammount
+    requests_ammount += 1
+    if r.status_code != 200 and r.status_code == 429:
+        rate_limit()
+    return r.json()
 
 def reverse_list(target_list):
     """
@@ -62,9 +71,7 @@ def getMessages(cursor):
     :param cursor:
     :return:
     """
-    answer = requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid}).json()["thread"]["items"]
-    global requests_ammount
-    requests_ammount += 1
+    answer = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers, {"sessionid": sessionid})["thread"]["items"]
     return answer
 
 def hasPrevCursor(cursor):
@@ -73,9 +80,7 @@ def hasPrevCursor(cursor):
     :param cursor:
     :return:
     """
-    answer = bool(requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid}).json()["thread"]["has_older"])
-    global requests_ammount
-    requests_ammount += 1
+    answer = bool(get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers, {"sessionid": sessionid})["thread"]["has_older"])
     return answer
 
 def getPrevCursor(cursor):
@@ -85,16 +90,10 @@ def getPrevCursor(cursor):
     :return:
     """
     try:
-        r = requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid})
-        global requests_ammount
-        requests_ammount += 1
-        json = r.json()
+        json = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers, {"sessionid": sessionid})
         return json["thread"]["prev_cursor"]
     except KeyError:
-        r = requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers=headers, cookies={"sessionid": sessionid})
-        global requests_ammount
-        requests_ammount += 1
-        json = r.json()
+        json = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers, {"sessionid": sessionid})
         try:
             return json["thread"]["oldest_cursor"]
         except KeyError:
@@ -149,14 +148,10 @@ def start():
     """
     Where everything starts... duh
     """
-    global id_remetente
     global members
     global mensagens
-    global requests_ammount
-    resposta = requests.get(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor=", headers=headers, cookies={"sessionid": sessionid})
-    requests_ammount += 1
-    thread = (resposta.json())["thread"]
-    id_remetente = thread["users"][0]["pk"]
+    resposta = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor=", headers, {"sessionid": sessionid})
+    thread = resposta["thread"]
     for user in thread["users"]:
         members[user["pk"]] = user["full_name"].split(" ")[0]
     mensagens = [thread["items"][0]]
@@ -169,10 +164,8 @@ def getThreads():
     """
     Get a list of all chats the user from entered sessionid has
     """
-    r = requests.get("https://i.instagram.com/api/v1/direct_v2/inbox/?persistentBadging=true&folder=&thread_message_limit=1", headers=headers, cookies={"sessionid": sessionid})
-    global requests_ammount
-    requests_ammount += 1
-    threads = r.json()["inbox"]["threads"]
+    r = get_request("https://i.instagram.com/api/v1/direct_v2/inbox/?persistentBadging=true&folder=&thread_message_limit=1", headers, {"sessionid": sessionid})
+    threads = r["inbox"]["threads"]
     threads_dict: dict = dict()
     for thread in threads:
         if thread["is_group"]:
@@ -274,7 +267,7 @@ def print_messages():
             texto = mensagem['item_type']
         timestamp_unix = float(mensagem["timestamp"]) / 1000000
         timestamp = datetime.fromtimestamp(timestamp_unix)
-        if verbose and file_path is None or not verbose and file_path is None:
+        if (verbose and file_path is None) or (not verbose and file_path is None) or verbose:
             print(f"{colored(name, 'yellow')}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
         if file_path is not None:
             with open(file_path, 'a+', encoding="UTF-8") as f:
@@ -334,15 +327,14 @@ if __name__ == '__main__':
     except Exception as e:
         traceback.print_exc()
         force_exit()
-        sys.exit(0)
     hours = int((seconds / (60*60)) % 24)
     minutes = int((seconds / 60) % 60)
     seconds2 = int(seconds % 60)
     if hours == 0 and minutes == 0:
-        print(f"All messages fetched! A total of {len(mensagens)} messages were fetched in {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+        print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
     elif hours == 0 and minutes != 0:
-        print(f"All messages fetched! A total of {len(mensagens)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+        print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
     else:
-        print(f"All messages fetched! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+        print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
 
     # start2()

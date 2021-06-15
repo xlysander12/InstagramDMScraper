@@ -31,6 +31,8 @@ members: dict = dict()
 seconds = 0
 limit_date = None
 requests_ammount = 0
+streamed_messages: list = []
+to_stream: list = []
 
 def force_exit():
     """
@@ -65,7 +67,7 @@ def reverse_list(target_list):
     """
     return [ele for ele in reversed(target_list)]
 
-def getMessages(cursor):
+def getMessages(cursor: str = ""):
     """
     Request to get messages stored in that Cursor
     :param cursor:
@@ -160,6 +162,31 @@ def start():
     print_messages()
     # start2()
 
+def start_streaming():
+    global to_stream
+    global streamed_messages
+    global members
+    # Get members list
+    resposta = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor=", headers, {"sessionid": sessionid})
+    thread = resposta["thread"]
+    for user in thread["users"]:
+        members[user["pk"]] = user["full_name"].split(" ")[0]
+
+    # Get first Messages
+    messages: dict = getMessages()
+    for message in messages:
+        to_stream.append(message)
+    print_messages(True)
+
+    # Start loop that runs every 30 secs to fetch new messages
+    while True:
+        messages: dict = getMessages()
+        for message in messages:
+            if message["item_id"] not in streamed_messages:
+                to_stream.append(message)
+        print_messages(True)
+        time.sleep(30)
+
 def getThreads():
     """
     Get a list of all chats the user from entered sessionid has
@@ -221,58 +248,101 @@ def start2():
 #             time.sleep(5000)
 #     except NameError: time.sleep(5000)
 
-def print_messages():
+def print_messages(streaming: bool = False):
     """
     Function called to print and export all fetched messages
     """
-    global isWaiting
-    isWaiting = False
-    if not verbose:
-        os.system("cls" if os.name == "nt" else "clear")
-    else:
-        print("----------- Messages -----------")
-    for mensagem in reverse_list(mensagens):
-        name = f"{members[mensagem['user_id']]}: " if mensagem["user_id"] in members else "Tu: "
-        texto = ""
-        if mensagem['item_type'] == 'text':
-            texto = f"{mensagem['text']}"
-
-        elif mensagem['item_type'] == 'media':
-            if mensagem['media']['media_type'] == 1:
-                texto = f"Photo: {mensagem['media']['image_versions2']['candidates'][0]['url']}"
-            elif mensagem['media']['media_type'] == 2:
-                texto = f"Video: {mensagem['media']['video_versions'][0]['url']}"
-
-        elif mensagem['item_type'] == 'media_share':
-            try:
-                texto = f"Post share from {mensagem['media_share']['user']['username']} (A.K.A {mensagem['media_share']['user']['full_name']}): https://instagram.com/p/{mensagem['media_share']['code']}/"
-            except KeyError:
-                texto = f"Post share: Unable to get post"
-
-        elif mensagem['item_type'] == 'voice_media':
-            texto = f"Voice message: {mensagem['voice_media']['media']['audio']['audio_src']}"
-
-        elif mensagem['item_type'] == 'raven_media':
-            if mensagem['visual_media']['media']['media_type'] == 1:
-                try:
-                    texto = f"Temporary photo: {mensagem['visual_media']['media']['image_versions2']['candidates'][0]['url']} (Might not work because might have expired already)"
-                except KeyError:
-                    texto = f"Temporary photo: Unable to fetch (Probably expired already)"
-            elif mensagem['visual_media']['media']['media_type'] == 2:
-                try:
-                    texto = f"Temporary video: {mensagem['visual_media']['media']['video_versions'][0]['url']} (Might not work because might have expired already)"
-                except KeyError:
-                    texto = f"Temporary video: Unable to fetch (Probably expired already)"
+    if not streaming:
+        global isWaiting
+        isWaiting = False
+        if not verbose:
+            os.system("cls" if os.name == "nt" else "clear")
         else:
-            texto = mensagem['item_type']
-        timestamp_unix = float(mensagem["timestamp"]) / 1000000
-        timestamp = datetime.fromtimestamp(timestamp_unix)
-        if (verbose and file_path is None) or (not verbose and file_path is None) or verbose:
+            print("----------- Messages -----------")
+        for mensagem in reverse_list(mensagens):
+            name = f"{members[mensagem['user_id']]}: " if mensagem["user_id"] in members else "Tu: "
+            texto = ""
+            if mensagem['item_type'] == 'text':
+                texto = f"{mensagem['text']}"
+
+            elif mensagem['item_type'] == 'media':
+                if mensagem['media']['media_type'] == 1:
+                    texto = f"Photo: {mensagem['media']['image_versions2']['candidates'][0]['url']}"
+                elif mensagem['media']['media_type'] == 2:
+                    texto = f"Video: {mensagem['media']['video_versions'][0]['url']}"
+
+            elif mensagem['item_type'] == 'media_share':
+                try:
+                    texto = f"Post share from {mensagem['media_share']['user']['username']} (A.K.A {mensagem['media_share']['user']['full_name']}): https://instagram.com/p/{mensagem['media_share']['code']}/"
+                except KeyError:
+                    texto = f"Post share: Unable to get post"
+
+            elif mensagem['item_type'] == 'voice_media':
+                texto = f"Voice message: {mensagem['voice_media']['media']['audio']['audio_src']}"
+
+            elif mensagem['item_type'] == 'raven_media':
+                if mensagem['visual_media']['media']['media_type'] == 1:
+                    try:
+                        texto = f"Temporary photo: {mensagem['visual_media']['media']['image_versions2']['candidates'][0]['url']} (Might not work because might have expired already)"
+                    except KeyError:
+                        texto = f"Temporary photo: Unable to fetch (Probably expired already)"
+                elif mensagem['visual_media']['media']['media_type'] == 2:
+                    try:
+                        texto = f"Temporary video: {mensagem['visual_media']['media']['video_versions'][0]['url']} (Might not work because might have expired already)"
+                    except KeyError:
+                        texto = f"Temporary video: Unable to fetch (Probably expired already)"
+            else:
+                texto = mensagem['item_type']
+            timestamp_unix = float(mensagem["timestamp"]) / 1000000
+            timestamp = datetime.fromtimestamp(timestamp_unix)
+            if (verbose and file_path is None) or (not verbose and file_path is None) or verbose:
+                print(f"{colored(name, 'yellow')}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
+            if file_path is not None:
+                with open(file_path, 'a+', encoding="UTF-8") as f:
+                    f.write(f"{name}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n")
+                    f.close()
+    else:
+        global to_stream
+        global streamed_messages
+        for mensagem in reverse_list(to_stream):
+            name = f"{members[mensagem['user_id']]}: " if mensagem["user_id"] in members else "Tu: "
+            texto = ""
+            if mensagem['item_type'] == 'text':
+                texto = f"{mensagem['text']}"
+
+            elif mensagem['item_type'] == 'media':
+                if mensagem['media']['media_type'] == 1:
+                    texto = f"Photo: {mensagem['media']['image_versions2']['candidates'][0]['url']}"
+                elif mensagem['media']['media_type'] == 2:
+                    texto = f"Video: {mensagem['media']['video_versions'][0]['url']}"
+
+            elif mensagem['item_type'] == 'media_share':
+                try:
+                    texto = f"Post share from {mensagem['media_share']['user']['username']} (A.K.A {mensagem['media_share']['user']['full_name']}): https://instagram.com/p/{mensagem['media_share']['code']}/"
+                except KeyError:
+                    texto = f"Post share: Unable to get post"
+
+            elif mensagem['item_type'] == 'voice_media':
+                texto = f"Voice message: {mensagem['voice_media']['media']['audio']['audio_src']}"
+
+            elif mensagem['item_type'] == 'raven_media':
+                if mensagem['visual_media']['media']['media_type'] == 1:
+                    try:
+                        texto = f"Temporary photo: {mensagem['visual_media']['media']['image_versions2']['candidates'][0]['url']} (Might not work because might have expired already)"
+                    except KeyError:
+                        texto = f"Temporary photo: Unable to fetch (Probably expired already)"
+                elif mensagem['visual_media']['media']['media_type'] == 2:
+                    try:
+                        texto = f"Temporary video: {mensagem['visual_media']['media']['video_versions'][0]['url']} (Might not work because might have expired already)"
+                    except KeyError:
+                        texto = f"Temporary video: Unable to fetch (Probably expired already)"
+            else:
+                texto = mensagem['item_type']
+            timestamp_unix = float(mensagem["timestamp"]) / 1000000
+            timestamp = datetime.fromtimestamp(timestamp_unix)
             print(f"{colored(name, 'yellow')}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
-        if file_path is not None:
-            with open(file_path, 'a+', encoding="UTF-8") as f:
-                f.write(f"{name}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n")
-                f.close()
+            streamed_messages.append(mensagem["item_id"])
+        to_stream.clear()
 
 def waiting():
     """
@@ -302,39 +372,43 @@ if __name__ == '__main__':
         getThreads()
 
     threadid = input("Chat's Threadid: ")
-    enable_verbose = input("Logging (y/N): ")
-    if enable_verbose == "y": verbose = True
+    choice = input("(1) Dump chat log\n(2) Stream chat\n")
+    if choice == "1":
+        enable_verbose = input("Logging (y/N): ")
+        if enable_verbose == "y": verbose = True
 
-    enable_export = input("Export to file (y/N): ")
-    if enable_export == "y":
-        file_path = input("File path + name: ")
-        if os.path.isfile(file_path):
-            os.remove(file_path)
+        enable_export = input("Export to file (y/N): ")
+        if enable_export == "y":
+            file_path = input("File path + name: ")
+            if os.path.isfile(file_path):
+                os.remove(file_path)
 
-    temp_limit_date = input("Limite date (dd/mm/aa [hh:mm:ss]): ")
-    if temp_limit_date != "":
-        if len(temp_limit_date.split(" ")) > 1:
-            limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y %H:%M:%S")
+        temp_limit_date = input("Limite date (dd/mm/aa [hh:mm:ss]): ")
+        if temp_limit_date != "":
+            if len(temp_limit_date.split(" ")) > 1:
+                limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y %H:%M:%S")
+            else:
+                limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y")
+        if verbose:
+            print("Fetching messages...")
+            print("----------- Verbose -----------")
+        x = threading.Thread(target=waiting)
+        x.start()
+        try:
+            start()
+        except Exception as e:
+            traceback.print_exc()
+            force_exit()
+        hours = int((seconds / (60*60)) % 24)
+        minutes = int((seconds / 60) % 60)
+        seconds2 = int(seconds % 60)
+        if hours == 0 and minutes == 0:
+            print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+        elif hours == 0 and minutes != 0:
+            print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
         else:
-            limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y")
-    if verbose:
-        print("Fetching messages...")
-        print("----------- Verbose -----------")
-    x = threading.Thread(target=waiting)
-    x.start()
-    try:
-        start()
-    except Exception as e:
-        traceback.print_exc()
-        force_exit()
-    hours = int((seconds / (60*60)) % 24)
-    minutes = int((seconds / 60) % 60)
-    seconds2 = int(seconds % 60)
-    if hours == 0 and minutes == 0:
-        print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
-    elif hours == 0 and minutes != 0:
-        print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+            print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
     else:
-        print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+        start_streaming()
 
     # start2()

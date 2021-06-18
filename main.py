@@ -118,26 +118,26 @@ def getAllMessages(thread):
         # Check if message is behind limit_date
         for temp_message in temp_messages:
             if verbose:
-                print(colored(f"[-] Checking message with id {temp_message['item_id']}", 'yellow'))
+                print(colored(f"[*] Checking message with id {temp_message['item_id']}", 'yellow'))
             if limit_date is not None and limit_date != "":
                 msg_timestamp = datetime.fromtimestamp(temp_message["timestamp"] / 1000000)
                 if limit_date > msg_timestamp:
                     passed_limit_date = True
                     if verbose:
-                        print(colored(f"[X] Message timestamp is older than given limit. Canceling checks... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]"))
+                        print(colored(f"[-] Message timestamp is older than given limit. Canceling checks... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
                     break
 
             for mensagem in mensagens:
                 if temp_message["item_id"] == mensagem["item_id"]:
                     Exists = True
                     if verbose:
-                        print(colored(f"[X] Repeated message... Moving on... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
+                        print(colored(f"[-] Repeated message... Moving on... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
                     break
             if Exists:
                 break
             to_add.append(temp_message)
             if verbose:
-                print(colored(f"[V] Message is valid. Moving to next message... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "green"))
+                print(colored(f"[+] Message is valid. Moving to next message... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "green"))
 
         mensagens.extend(to_add)
         if hasPrevCursor(current_cursor) and not passed_limit_date:
@@ -355,7 +355,7 @@ def waiting():
             seconds += 1
             if not verbose:
                 os.system("cls" if os.name == "nt" else "clear")
-                print(f"Fetching messages{'.' * i}{' ' * (4-i)}({seconds}s)")
+                print(f"Fetching messages{'.' * i}{' ' * (4-i)}({seconds}s) ({len(mensagens)} fetched messages in {requests_ammount} requests)")
                 if i < 3:
                     i += 1
                 else:
@@ -409,6 +409,9 @@ if __name__ == '__main__':
         else:
             print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
     else:
-        start_streaming()
+        try:
+            start_streaming()
+        except KeyboardInterrupt:
+            print(f"Streaming terminated!")
 
     # start2()

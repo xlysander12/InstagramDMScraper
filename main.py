@@ -6,6 +6,7 @@ from datetime import datetime
 
 import requests
 from termcolor import colored
+import argparse
 
 headers = {
 	"accept": "*/*",
@@ -22,9 +23,9 @@ sessionid = None
 threadid = None
 verbose = False
 file_path = None
-prevCursor = ""
-oldestCursor = ""
-used_cursors: list = list()
+prevCursor = "" # Internal Use
+oldestCursor = "" # Internal Use
+used_cursors: list = list() # Internal Use
 mensagens: list = list()
 isWaiting = True
 members: dict = dict()
@@ -33,6 +34,17 @@ limit_date = None
 requests_ammount = 0
 streamed_messages: list = []
 to_stream: list = []
+parser = argparse.ArgumentParser()
+args = None
+
+# Creating args
+parser.add_argument("-s" "--sessionid", dest="sessionid", type=str, help="Account's Sessionid")
+parser.add_argument("-S", "--stream", dest="stream", action="store_true")
+parser.add_argument("-t", "--threadid", dest="threadid", type=int, help="Chat's Threadid")
+parser.add_argument("-v", "--verbose", dest="verbose", action="store_true")
+parser.add_argument("-o", "--output", dest="output", type=str, help="Outfile file")
+parser.add_argument("-d", "--date", dest="date", type=str, help="Limit date")
+parser.add_argument("-l", "--list", dest="list", action="store_true")
 
 def force_exit():
     """
@@ -49,6 +61,38 @@ def rate_limit():
     global isWaiting
     isWaiting = False
     raise RuntimeError("You're being rate-limited")
+
+
+def hasArgs():
+    global args
+    return not (args.date is None and args.output is None and args.sessionid is None and args.stream is False and args.threadid is None and args.verbose is False)
+
+
+def parseArgs():
+    global sessionid
+    global threadid
+    global verbose
+    global file_path
+    global limit_date
+    if args.sessionid is None:
+        return (False, "No Sessionid was provided")
+    sessionid = args.sessionid
+    if args.list:
+        return (True, "list")
+    if args.threadid is None:
+        return (False, "No Threadid was provided")
+    threadid = args.threadid
+    if args.stream:
+        return (True, "stream")
+
+    verbose = args.verbose
+    file_path = args.output
+    if args.date is not None:
+        if len(args.date.split("@")) > 1:
+            limit_date = datetime.strptime(args.date, "%d/%m/%Y@%H:%M:%S")
+        else:
+            limit_date = datetime.strptime(args.date, "%d/%m/%Y")
+    return (True, None)
 
 
 def get_request(url: str, headers: dict, cookies: dict):
@@ -185,7 +229,7 @@ def start_streaming():
             if message["item_id"] not in streamed_messages:
                 to_stream.append(message)
         print_messages(True)
-        time.sleep(30)
+        time.sleep(10)
 
 def getThreads():
     """
@@ -365,53 +409,78 @@ def waiting():
         pass
 
 if __name__ == '__main__':
-    # signal.signal(signal.SIGINT, signal_handler)
-    sessionid = input("Account's Sessionid: ")
-    check_threads = input("See chats list (y/N): ")
-    if check_threads == "y":
-        getThreads()
-
-    threadid = input("Chat's Threadid: ")
-    choice = input("(1) Dump chat log\n(2) Stream chat\n")
-    if choice == "1":
-        enable_verbose = input("Logging (y/N): ")
-        if enable_verbose == "y": verbose = True
-
-        enable_export = input("Export to file (y/N): ")
-        if enable_export == "y":
-            file_path = input("File path + name: ")
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-
-        temp_limit_date = input("Limite date (dd/mm/aa [hh:mm:ss]): ")
-        if temp_limit_date != "":
-            if len(temp_limit_date.split(" ")) > 1:
-                limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y %H:%M:%S")
-            else:
-                limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y")
-        if verbose:
-            print("Fetching messages...")
-            print("----------- Verbose -----------")
-        x = threading.Thread(target=waiting)
-        x.start()
-        try:
-            start()
-        except Exception as e:
-            traceback.print_exc()
-            force_exit()
-        hours = int((seconds / (60*60)) % 24)
-        minutes = int((seconds / 60) % 60)
-        seconds2 = int(seconds % 60)
-        if hours == 0 and minutes == 0:
-            print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
-        elif hours == 0 and minutes != 0:
-            print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+    args = parser.parse_args()
+    if hasArgs():
+        success, message = parseArgs()
+        if not success:
+            print(f"Error: {message}")
         else:
-            print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+            if message is not None and message == "list":
+                getThreads()
+            elif message is not None and message == "stream":
+                try:
+                    start_streaming()
+                except KeyboardInterrupt:
+                    print(f"Streaming terminated!")
+            else:
+                if verbose:
+                    print("Fetching messages...")
+                    print("----------- Verbose -----------")
+                x = threading.Thread(target=waiting)
+                x.start()
+                try:
+                    start()
+                except Exception as e:
+                    traceback.print_exc()
+                    force_exit()
     else:
-        try:
-            start_streaming()
-        except KeyboardInterrupt:
-            print(f"Streaming terminated!")
+        # signal.signal(signal.SIGINT, signal_handler)
+        sessionid = input("Account's Sessionid: ")
+        check_threads = input("See chats list (y/N): ")
+        if check_threads == "y":
+            getThreads()
+
+        threadid = input("Chat's Threadid: ")
+        choice = input("(1) Dump chat log\n(2) Stream chat\n")
+        if choice == "1":
+            enable_verbose = input("Logging (y/N): ")
+            if enable_verbose == "y": verbose = True
+
+            enable_export = input("Export to file (y/N): ")
+            if enable_export == "y":
+                file_path = input("File path + name: ")
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+
+            temp_limit_date = input("Limite date (dd/mm/aa[@hh:mm:ss]): ")
+            if temp_limit_date != "":
+                if len(temp_limit_date.split("@")) > 1:
+                    limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y@%H:%M:%S")
+                else:
+                    limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y")
+            if verbose:
+                print("Fetching messages...")
+                print("----------- Verbose -----------")
+            x = threading.Thread(target=waiting)
+            x.start()
+            try:
+                start()
+            except Exception as e:
+                traceback.print_exc()
+                force_exit()
+            hours = int((seconds / (60*60)) % 24)
+            minutes = int((seconds / 60) % 60)
+            seconds2 = int(seconds % 60)
+            if hours == 0 and minutes == 0:
+                print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+            elif hours == 0 and minutes != 0:
+                print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+            else:
+                print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+        else:
+            try:
+                start_streaming()
+            except KeyboardInterrupt:
+                print(f"Streaming terminated!")
 
     # start2()

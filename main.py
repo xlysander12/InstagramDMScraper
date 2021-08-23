@@ -26,6 +26,7 @@ file_path = None
 prevCursor = "" # Internal Use
 oldestCursor = "" # Internal Use
 used_cursors: list = list() # Internal Use
+last_response = None
 mensagens: list = list()
 isWaiting = True
 members: dict = dict()
@@ -101,7 +102,14 @@ def get_request(url: str, headers: dict, cookies: dict):
     requests_ammount += 1
     if r.status_code != 200 and r.status_code == 429:
         rate_limit()
-    return r.json()
+    try:
+        res = r.json()
+        global last_response
+        last_response = res
+        return res
+    except json.JSONDecodeError:
+        print(r.text)
+        return None
 
 def reverse_list(target_list):
     """
@@ -126,7 +134,7 @@ def hasPrevCursor(cursor):
     :param cursor:
     :return:
     """
-    answer = bool(get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers, {"sessionid": sessionid})["thread"]["has_older"])
+    answer = bool(last_response["thread"]["has_older"])
     return answer
 
 def getPrevCursor(cursor):
@@ -136,12 +144,10 @@ def getPrevCursor(cursor):
     :return:
     """
     try:
-        json = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers, {"sessionid": sessionid})
-        return json["thread"]["prev_cursor"]
+        return last_response["thread"]["prev_cursor"]
     except KeyError:
-        json = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers, {"sessionid": sessionid})
         try:
-            return json["thread"]["oldest_cursor"]
+            return last_response["thread"]["oldest_cursor"]
         except KeyError:
             return None
 

@@ -55,7 +55,7 @@ def force_exit():
     print(colored(f"Program exit before time... Printing fetched messages... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
     if isWaiting:
         isWaiting = False
-        print_messages()
+    print_messages()
 
 
 def rate_limit():
@@ -394,23 +394,20 @@ def print_messages(streaming: bool = False):
             streamed_messages.append(mensagem["item_id"])
         to_stream.clear()
 
+def count_seconds():
+    global seconds
+    while isWaiting:
+        seconds += 1
+        time.sleep(1)
 def waiting():
     """
     Thread to keep the "Fetching" text fancy
     """
     try:
-        global seconds
-        i = 0
         while isWaiting:
-            seconds += 1
             if not verbose:
                 os.system("cls" if os.name == "nt" else "clear")
-                print(f"Fetching messages{'.' * i}{' ' * (4-i)}({seconds}s) ({len(mensagens)} fetched messages in {requests_ammount} requests)")
-                if i < 3:
-                    i += 1
-                else:
-                    i = 0
-            time.sleep(1)
+                print(f"Fetching messages{'.' * ((seconds % 3) + 1)}{' ' * (4-((seconds % 3) + 1))}({seconds}s) ({len(mensagens)} fetched messages in {requests_ammount} requests)")
     except KeyboardInterrupt:
         pass
 
@@ -432,8 +429,10 @@ if __name__ == '__main__':
                 if verbose:
                     print("Fetching messages...")
                     print("----------- Verbose -----------")
-                x = threading.Thread(target=waiting)
-                x.start()
+                secs_thread = threading.Thread(target=count_seconds)
+                waiting_thread = threading.Thread(target=waiting)
+                secs_thread.start()
+                waiting_thread.start()
                 try:
                     start()
                 except Exception as e:

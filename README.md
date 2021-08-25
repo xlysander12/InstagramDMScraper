@@ -15,6 +15,8 @@ This little script scrapes every private message with any user. You can either j
 - Fetch all messages from any DM chat
 - Fetch only messages more recent that specified date (optional)
 - Export fetched messages to text file
+- Stream the chat live. See the messages coming in in real time
 
 ## What's the sessionid?
-The sessionid is a cookie that the Instagram website stores in your browser when there's an account logged in it. Everytime the user logs out and logins again the sessionid changes
+The sessionid is a cookie that the Instagram website stores in your browser when there's an account logged in it. Everytime the user logs out and logins again the sessionid changes.  
+If you need to find out the sessionid take a look at [CookiesGrabber](https://github.com/xlysander12/CookiesGrabber)

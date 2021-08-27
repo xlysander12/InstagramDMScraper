@@ -1,8 +1,10 @@
 import os
+import sys
 import threading
 import time
 import traceback
 from datetime import datetime
+# import curses
 
 import requests
 from termcolor import colored
@@ -19,93 +21,94 @@ headers = {
 	'user-agent':'Mozilla/5.0 (iPhone; CPU iPhone OS 12_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 105.0.0.11.118 (iPhone11,8; iOS 12_3_1; en_US; en-US; scale=2.00; 828x1792; 165586599)'
 }
 
-sessionid = None
-threadid = None
-verbose = False
-file_path = None
-prevCursor = "" # Internal Use
-oldestCursor = "" # Internal Use
-used_cursors: list = list() # Internal Use
-last_response = None
-mensagens: list = list()
-isWaiting = True
-members: dict = dict()
-seconds = 0
-limit_date = None
-requests_ammount = 0
-streamed_messages: list = []
-to_stream: list = []
-parser = argparse.ArgumentParser()
-args = None
+SESSIONID = None
+THREADID = None
+VERBOSE = False
+FILE_PATH = None
+PREV_CURSOR = "" # Internal Use
+OLDEST_CURSOR = "" # Internal Use
+USED_CURSORS: list = list() # Internal Use
+LAST_RESPONSE = None
+MESSAGES: list = list()
+IS_WAITING = True
+MEMBERS: dict = dict()
+TOTAL_TIME = 0
+RATE: list = [0]
+LIMIT_DATE = None
+REQUESTS_AMMOUNT = 0
+STREAMED_MESSAGES: list = []
+TO_STREAM: list = []
+PARSER = argparse.ArgumentParser()
+ARGS = None
 
 # Creating args
-parser.add_argument("-s" "--sessionid", dest="sessionid", type=str, help="Account's Sessionid")
-parser.add_argument("-S", "--stream", dest="stream", action="store_true")
-parser.add_argument("-t", "--threadid", dest="threadid", type=int, help="Chat's Threadid")
-parser.add_argument("-v", "--verbose", dest="verbose", action="store_true")
-parser.add_argument("-o", "--output", dest="output", type=str, help="Outfile file")
-parser.add_argument("-d", "--date", dest="date", type=str, help="Limit date")
-parser.add_argument("-l", "--list", dest="list", action="store_true")
+PARSER.add_argument("-s" "--sessionid", dest="sessionid", type=str, help="Account's Sessionid")
+PARSER.add_argument("-S", "--stream", dest="stream", action="store_true")
+PARSER.add_argument("-t", "--threadid", dest="threadid", type=int, help="Chat's Threadid")
+PARSER.add_argument("-v", "--verbose", dest="verbose", action="store_true")
+PARSER.add_argument("-o", "--output", dest="output", type=str, help="Outfile file")
+PARSER.add_argument("-d", "--date", dest="date", type=str, help="Limit date")
+PARSER.add_argument("-l", "--list", dest="list", action="store_true")
 
 def force_exit():
     """
     Called when the program is abruptely terminated (Like an exception or CTRL+C)
     """
-    global isWaiting
+    global IS_WAITING
     print(colored(f"Program exit before time... Printing fetched messages... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
-    if isWaiting:
-        isWaiting = False
+    if IS_WAITING:
+        IS_WAITING = False
     print_messages()
 
 
 def rate_limit():
-    global isWaiting
-    isWaiting = False
+    global IS_WAITING
+    IS_WAITING = False
     raise RuntimeError("You're being rate-limited")
 
 
-def hasArgs():
-    global args
-    return not (args.date is None and args.output is None and args.sessionid is None and args.stream is False and args.threadid is None and args.verbose is False)
+def has_args():
+    global ARGS
+    return not (ARGS.date is None and ARGS.output is None and ARGS.sessionid is None and ARGS.stream is False and ARGS.threadid is None and ARGS.verbose is False)
 
 
-def parseArgs():
-    global sessionid
-    global threadid
-    global verbose
-    global file_path
-    global limit_date
-    if args.sessionid is None:
+def parse_args():
+    global SESSIONID
+    global THREADID
+    global VERBOSE
+    global FILE_PATH
+    global LIMIT_DATE
+    if ARGS.sessionid is None:
         return (False, "No Sessionid was provided")
-    sessionid = args.sessionid
-    if args.list:
+    SESSIONID = ARGS.sessionid
+    if ARGS.list:
         return (True, "list")
-    if args.threadid is None:
+    if ARGS.threadid is None:
         return (False, "No Threadid was provided")
-    threadid = args.threadid
-    if args.stream:
+    THREADID = ARGS.threadid
+    if ARGS.stream:
         return (True, "stream")
 
-    verbose = args.verbose
-    file_path = args.output
-    if args.date is not None:
-        if len(args.date.split("@")) > 1:
-            limit_date = datetime.strptime(args.date, "%d/%m/%Y@%H:%M:%S")
+    VERBOSE = ARGS.verbose
+    FILE_PATH = ARGS.output
+    if ARGS.date is not None:
+        if len(ARGS.date.split("@")) > 1:
+            LIMIT_DATE = datetime.strptime(ARGS.date, "%d/%m/%Y@%H:%M:%S")
         else:
-            limit_date = datetime.strptime(args.date, "%d/%m/%Y")
+            LIMIT_DATE = datetime.strptime(ARGS.date, "%d/%m/%Y")
     return (True, None)
 
 
 def get_request(url: str, headers: dict, cookies: dict):
     r = requests.get(url, headers=headers, cookies=cookies)
-    global requests_ammount
-    requests_ammount += 1
+    global REQUESTS_AMMOUNT
+    REQUESTS_AMMOUNT += 1
     if r.status_code != 200 and r.status_code == 429:
         rate_limit()
     try:
         res = r.json()
-        global last_response
-        last_response = res
+        global LAST_RESPONSE
+        LAST_RESPONSE = res
         return res
     except json.JSONDecodeError:
         print(r.text)
@@ -119,79 +122,91 @@ def reverse_list(target_list):
     """
     return [ele for ele in reversed(target_list)]
 
-def getMessages(cursor: str = ""):
+def get_messages(cursor: str = ""):
     """
     Request to get messages stored in that Cursor
     :param cursor:
     :return:
     """
-    answer = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor={cursor}", headers, {"sessionid": sessionid})["thread"]["items"]
+    answer = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{THREADID}/?cursor={cursor}", headers, {"sessionid": SESSIONID})["thread"]["items"]
     return answer
 
-def hasPrevCursor(cursor):
+def has_prev_cursor(cursor):
     """
     Check if there's a Cursor older than the given one
     :param cursor:
     :return:
     """
-    answer = bool(last_response["thread"]["has_older"])
+    answer = bool(LAST_RESPONSE["thread"]["has_older"])
     return answer
 
-def getPrevCursor(cursor):
+def get_prev_cursor(cursor):
     """
     Get the most recent cursor older than the given one
     :param cursor:
     :return:
     """
     try:
-        return last_response["thread"]["prev_cursor"]
+        return LAST_RESPONSE["thread"]["prev_cursor"]
     except KeyError:
         try:
-            return last_response["thread"]["oldest_cursor"]
+            return LAST_RESPONSE["thread"]["oldest_cursor"]
         except KeyError:
             return None
 
-def getAllMessages(thread):
+def get_all_messages(thread):
     """
     Main loop to get all messages playing around with Cursor and storing messages on the way
     :param thread:
     """
-    global mensagens
+    global MESSAGES
+    global RATE
+    global TOTAL_TIME
     current_cursor = thread['newest_cursor']
     passed_limit_date = False
     while True:
+        start = round(time.time()*1000)
         if current_cursor is None: break
-        temp_messages = getMessages(current_cursor)
+        temp_messages = get_messages(current_cursor)
         to_add: list = list()
         Exists = False
 
         # Check if message is behind limit_date
         for temp_message in temp_messages:
-            if verbose:
+            if VERBOSE:
                 print(colored(f"[*] Checking message with id {temp_message['item_id']}", 'yellow'))
-            if limit_date is not None and limit_date != "":
+            if LIMIT_DATE is not None and LIMIT_DATE != "":
                 msg_timestamp = datetime.fromtimestamp(temp_message["timestamp"] / 1000000)
-                if limit_date > msg_timestamp:
+                if LIMIT_DATE > msg_timestamp:
                     passed_limit_date = True
-                    if verbose:
+                    if VERBOSE:
                         print(colored(f"[-] Message timestamp is older than given limit. Canceling checks... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
                     break
 
-            for mensagem in mensagens:
+            for mensagem in MESSAGES:
                 if temp_message["item_id"] == mensagem["item_id"]:
                     Exists = True
-                    if verbose:
+                    if VERBOSE:
                         print(colored(f"[-] Repeated message... Moving on... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
                     break
             if Exists:
-                break
+                continue
             to_add.append(temp_message)
-            if verbose:
+            if VERBOSE:
                 print(colored(f"[+] Message is valid. Moving to next message... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "green"))
 
-        mensagens.extend(to_add)
-        if hasPrevCursor(current_cursor) and not passed_limit_date:
-            current_cursor = getPrevCursor(current_cursor)
+        MESSAGES.extend(to_add)
+        run_time = round(time.time() * 1000) - start
+        try:
+            rate = (1000*len(to_add)) / run_time
+        except ZeroDivisionError:
+            rate = RATE[len(RATE) - 1]
+        RATE.append(rate)
+        TOTAL_TIME += run_time
+
+
+        if has_prev_cursor(current_cursor) and not passed_limit_date:
+            current_cursor = get_prev_cursor(current_cursor)
         else:
             break
 
@@ -200,48 +215,47 @@ def start():
     """
     Where everything starts... duh
     """
-    global members
-    global mensagens
-    resposta = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor=", headers, {"sessionid": sessionid})
+    global MEMBERS
+    global MESSAGES
+    global TOTAL_TIME
+    resposta = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{THREADID}/?cursor=", headers, {"sessionid": SESSIONID})
     thread = resposta["thread"]
     for user in thread["users"]:
-        members[user["pk"]] = user["full_name"].split(" ")[0]
-    mensagens = [thread["items"][0]]
-    getAllMessages(thread)
-    # mensagens: list = reverse_list(thread["items"])
+        MEMBERS[user["pk"]] = user["full_name"].split(" ")[0]
+    MESSAGES = [thread["items"][0]]
+    get_all_messages(thread)
     print_messages()
-    # start2()
 
 def start_streaming():
-    global to_stream
-    global streamed_messages
-    global members
+    global TO_STREAM
+    global STREAMED_MESSAGES
+    global MEMBERS
     # Get members list
-    resposta = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{threadid}/?cursor=", headers, {"sessionid": sessionid})
+    resposta = get_request(f"https://i.instagram.com/api/v1/direct_v2/threads/{THREADID}/?cursor=", headers, {"sessionid": SESSIONID})
     thread = resposta["thread"]
     for user in thread["users"]:
-        members[user["pk"]] = user["full_name"].split(" ")[0]
+        MEMBERS[user["pk"]] = user["full_name"].split(" ")[0]
 
     # Get first Messages
-    messages: dict = getMessages()
+    messages: dict = get_messages()
     for message in messages:
-        to_stream.append(message)
+        TO_STREAM.append(message)
     print_messages(True)
 
     # Start loop that runs every 30 secs to fetch new messages
     while True:
-        messages: dict = getMessages()
+        messages: dict = get_messages()
         for message in messages:
-            if message["item_id"] not in streamed_messages:
-                to_stream.append(message)
+            if message["item_id"] not in STREAMED_MESSAGES:
+                TO_STREAM.append(message)
         print_messages(True)
         time.sleep(10)
 
-def getThreads():
+def get_threads():
     """
     Get a list of all chats the user from entered sessionid has
     """
-    r = get_request("https://i.instagram.com/api/v1/direct_v2/inbox/?persistentBadging=true&folder=&thread_message_limit=1", headers, {"sessionid": sessionid})
+    r = get_request("https://i.instagram.com/api/v1/direct_v2/inbox/?persistentBadging=true&folder=&thread_message_limit=1", headers, {"sessionid": SESSIONID})
     threads = r["inbox"]["threads"]
     threads_dict: dict = dict()
     for thread in threads:
@@ -254,63 +268,17 @@ def getThreads():
     for thread in threads_dict:
         print(f"{threads_dict.get(thread)} [{thread}]")
 
-def start2():
-    """
-    Unused function that worked as a test during development but I'm afraid of removing so it stays here
-    """
-    global prevCursor
-    global oldestCursor
-    stopGettingMessages = False
-    allMessages: list = []
-    while prevCursor != "MINCURSOR" and not stopGettingMessages:
-        getMessageAPIUrl = "https://i.instagram.com/api/v1/direct_v2/threads/" + threadid + "/"
-        if oldestCursor is not None and len(oldestCursor) > 0:
-            getMessageAPIUrl = getMessageAPIUrl + "?cursor=" + oldestCursor + ""
-
-        r = requests.get(getMessageAPIUrl, headers=headers, cookies={"sessionid": sessionid})
-        rjson = r.json()
-
-        messages: list = rjson["thread"]["items"]
-        for message in messages:
-            isExists = False
-
-            for i in range(len(allMessages)):
-                existingElement = messages[i]
-                if existingElement["item_id"] == message["item_id"]:
-                    isExists = True
-                    break
-
-            if not isExists:
-                allMessages.append(message)
-
-            oldestCursor = rjson["thread"]["oldest_cursor"]
-            prevCursor = rjson["thread"]["prev_cursor"]
-    if enable_verbose: print("----------------------------")
-    print_messages()
-
-# def print_messages():
-#     try:
-#         while printing:
-#             for mensagem in mensagens:
-#                 name = f"{nome_remetente}: " if mensagem["user_id"] == id_remetente else "Tu: "
-#                 texto = f"{mensagem['text'] if mensagem['item_type'] == 'text' else mensagem['item_type']}"
-#                 print(f"{name}{texto}")
-#             time.sleep(5000)
-#     except NameError: time.sleep(5000)
 
 def print_messages(streaming: bool = False):
     """
     Function called to print and export all fetched messages
     """
     if not streaming:
-        global isWaiting
-        isWaiting = False
-        if not verbose:
-            os.system("cls" if os.name == "nt" else "clear")
-        else:
-            print("----------- Messages -----------")
-        for mensagem in reverse_list(mensagens):
-            name = f"{members[mensagem['user_id']]}: " if mensagem["user_id"] in members else "Tu: "
+        global IS_WAITING
+        IS_WAITING = False
+        print("----------- Messages -----------")
+        for mensagem in reverse_list(MESSAGES):
+            name = f"{MEMBERS[mensagem['user_id']]}: " if mensagem["user_id"] in MEMBERS else "You: "
             texto = ""
             if mensagem['item_type'] == 'text':
                 texto = f"{mensagem['text']}"
@@ -345,17 +313,17 @@ def print_messages(streaming: bool = False):
                 texto = mensagem['item_type']
             timestamp_unix = float(mensagem["timestamp"]) / 1000000
             timestamp = datetime.fromtimestamp(timestamp_unix)
-            if (verbose and file_path is None) or (not verbose and file_path is None) or verbose:
+            if (VERBOSE and FILE_PATH is None) or (not VERBOSE and FILE_PATH is None) or VERBOSE:
                 print(f"{colored(name, 'yellow')}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
-            if file_path is not None:
-                with open(file_path, 'a+', encoding="UTF-8") as f:
+            if FILE_PATH is not None:
+                with open(FILE_PATH, 'a+', encoding="UTF-8") as f:
                     f.write(f"{name}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n")
                     f.close()
     else:
-        global to_stream
-        global streamed_messages
-        for mensagem in reverse_list(to_stream):
-            name = f"{members[mensagem['user_id']]}: " if mensagem["user_id"] in members else "Tu: "
+        global TO_STREAM
+        global STREAMED_MESSAGES
+        for mensagem in reverse_list(TO_STREAM):
+            name = f"{MEMBERS[mensagem['user_id']]}: " if mensagem["user_id"] in MEMBERS else "Tu: "
             texto = ""
             if mensagem['item_type'] == 'text':
                 texto = f"{mensagem['text']}"
@@ -391,101 +359,128 @@ def print_messages(streaming: bool = False):
             timestamp_unix = float(mensagem["timestamp"]) / 1000000
             timestamp = datetime.fromtimestamp(timestamp_unix)
             print(f"{colored(name, 'yellow')}{texto} [{timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
-            streamed_messages.append(mensagem["item_id"])
-        to_stream.clear()
+            STREAMED_MESSAGES.append(mensagem["item_id"])
+        TO_STREAM.clear()
 
 def count_seconds():
-    global seconds
-    while isWaiting:
-        seconds += 1
+    """
+    I know this is a retarded way to do this, but its how I made it at the time and it works soooo, idc
+    :return:
+    """
+    global TOTAL_TIME
+    while IS_WAITING:
         time.sleep(1)
+        TOTAL_TIME += 1
+
 def waiting():
     """
     Thread to keep the "Fetching" text fancy
     """
     try:
-        while isWaiting:
-            if not verbose:
-                os.system("cls" if os.name == "nt" else "clear")
-                print(f"Fetching messages{'.' * ((seconds % 3) + 1)}{' ' * (4-((seconds % 3) + 1))}({seconds}s) ({len(mensagens)} fetched messages in {requests_ammount} requests)")
+        while IS_WAITING:
+            if not VERBOSE:
+                hours = int(((TOTAL_TIME / 1000) / (60 * 60)) % 24)
+                minutes = int(((TOTAL_TIME / 1000) / 60) % 60)
+                seconds = int((TOTAL_TIME / 1000) % 60)
+                print(f"Fetching messages{'.' * ((int(TOTAL_TIME/1000) % 3) + 1)}{' ' * (4 - ((int(TOTAL_TIME/1000) % 3) + 1))}({f'{hours}h' if hours != 0 else ''}{f'{minutes}m' if hours != 0 or minutes != 0 else ''}{f'{seconds}s'}) ({len(MESSAGES)} fetched messages in {REQUESTS_AMMOUNT} requests) (Rate: {'{:.2f}'.format(RATE[len(RATE) - 1])} messages/second)", end="\r")
     except KeyboardInterrupt:
         pass
 
-if __name__ == '__main__':
-    args = parser.parse_args()
-    if hasArgs():
-        success, message = parseArgs()
+def compute_average_rate():
+    return sum(RATE) / len(RATE)
+
+def main():
+    global THREADID
+    global SESSIONID
+    global ARGS
+    global VERBOSE
+    global LIMIT_DATE
+    streaming = False
+    ARGS = PARSER.parse_args()
+    if has_args():
+        success, message = parse_args()
         if not success:
             print(f"Error: {message}")
         else:
             if message is not None and message == "list":
-                getThreads()
+                get_threads()
             elif message is not None and message == "stream":
                 try:
+                    streaming = True
                     start_streaming()
                 except KeyboardInterrupt:
                     print(f"Streaming terminated!")
             else:
-                if verbose:
+                if VERBOSE:
                     print("Fetching messages...")
                     print("----------- Verbose -----------")
-                secs_thread = threading.Thread(target=count_seconds)
                 waiting_thread = threading.Thread(target=waiting)
-                secs_thread.start()
-                waiting_thread.start()
+                waiting_thread.daemon = True
                 try:
+                    waiting_thread.start()
                     start()
                 except Exception as e:
                     traceback.print_exc()
                     force_exit()
     else:
         # signal.signal(signal.SIGINT, signal_handler)
-        sessionid = input("Account's Sessionid: ")
+        SESSIONID = input("Account's Sessionid: ")
         check_threads = input("See chats list (y/N): ")
         if check_threads == "y":
-            getThreads()
+            get_threads()
 
-        threadid = input("Chat's Threadid: ")
+        THREADID = input("Chat's Threadid: ")
         choice = input("(1) Dump chat log\n(2) Stream chat\n")
         if choice == "1":
-            enable_verbose = input("Logging (y/N): ")
-            if enable_verbose == "y": verbose = True
+            streaming = True
+            enable_verbose = input("Verbose (y/N): ")
+            if enable_verbose == "y":
+                VERBOSE = True
 
             enable_export = input("Export to file (y/N): ")
             if enable_export == "y":
-                file_path = input("File path + name: ")
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
+                FILE_PATH = input("File path + name: ")
+                if os.path.isfile(FILE_PATH):
+                    os.remove(FILE_PATH)
 
             temp_limit_date = input("Limite date (dd/mm/aa[@hh:mm:ss]): ")
             if temp_limit_date != "":
                 if len(temp_limit_date.split("@")) > 1:
-                    limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y@%H:%M:%S")
+                    LIMIT_DATE = datetime.strptime(temp_limit_date, "%d/%m/%Y@%H:%M:%S")
                 else:
-                    limit_date = datetime.strptime(temp_limit_date, "%d/%m/%Y")
-            if verbose:
+                    LIMIT_DATE = datetime.strptime(temp_limit_date, "%d/%m/%Y")
+            if VERBOSE:
                 print("Fetching messages...")
                 print("----------- Verbose -----------")
-            x = threading.Thread(target=waiting)
-            x.start()
+            waiting_thread = threading.Thread(target=waiting)
+            waiting_thread.daemon = True
             try:
+                waiting_thread.start()
                 start()
             except Exception as e:
                 traceback.print_exc()
                 force_exit()
-            hours = int((seconds / (60*60)) % 24)
-            minutes = int((seconds / 60) % 60)
-            seconds2 = int(seconds % 60)
-            if hours == 0 and minutes == 0:
-                print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
-            elif hours == 0 and minutes != 0:
-                print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
-            else:
-                print(f"Fetching ended! A total of {len(mensagens)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds2} {'seconds' if seconds2 != 1 else 'second'} with {requests_ammount} requests to the API")
+
         else:
             try:
                 start_streaming()
             except KeyboardInterrupt:
                 print(f"Streaming terminated!")
 
-    # start2()
+    if not streaming:
+        hours = int(((TOTAL_TIME/1000) / (60 * 60)) % 24)
+        minutes = int(((TOTAL_TIME/1000) / 60) % 60)
+        seconds = int((TOTAL_TIME/1000) % 60)
+        if hours == 0 and minutes == 0:
+            print(
+                f"Fetching ended! A total of {len(MESSAGES)} messages were fetched in {seconds} {'seconds' if seconds != 1 else 'second'} with {REQUESTS_AMMOUNT} requests to the API and average of {'{:.2f}'.format(compute_average_rate())} messages/second")
+        elif hours == 0 and minutes != 0:
+            print(
+                f"Fetching ended! A total of {len(MESSAGES)} messages were fetched in {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds} {'seconds' if seconds != 1 else 'second'} with {REQUESTS_AMMOUNT} requests to the API and average of {'{:.2f}'.format(compute_average_rate())} messages/second")
+        else:
+            print(
+                f"Fetching ended! A total of {len(MESSAGES)} messages were fetched in {hours} {'hours' if hours != 1 else 'hour'}, {minutes} {'minutes' if minutes != 1 else 'minute'}, {seconds} {'seconds' if seconds != 1 else 'second'} with {REQUESTS_AMMOUNT} requests to the API and average of {'{:.2f}'.format(compute_average_rate())} messages/second")
+
+
+if __name__ == '__main__':
+    main()

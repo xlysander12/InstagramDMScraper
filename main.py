@@ -3,6 +3,7 @@ import sys
 import threading
 import time
 import traceback
+import json
 from datetime import datetime
 # import curses
 
@@ -255,7 +256,7 @@ def get_threads():
     """
     Get a list of all chats the user from entered sessionid has
     """
-    r = get_request("https://i.instagram.com/api/v1/direct_v2/inbox/?persistentBadging=true&folder=&thread_message_limit=1", headers, {"sessionid": SESSIONID})
+    r = get_request("https://i.instagram.com/api/v1/direct_v2/inbox/?persistentBadging=true&folder=&thread_message_limit=1&limit=200", headers, {"sessionid": SESSIONID})
     threads = r["inbox"]["threads"]
     threads_dict: dict = dict()
     for thread in threads:

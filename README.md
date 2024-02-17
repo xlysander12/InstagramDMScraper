@@ -18,5 +18,5 @@ This little script scrapes every private message with any user. You can either j
 - Stream the chat live. See the messages coming in in real time
 
 ## What's the sessionid?
-The sessionid is a cookie that the Instagram website stores in your browser when there's an account logged in it. Everytime the user logs out and logins again the sessionid changes.  
+The sessionid is a cookie that the Instagram website stores in your browser when there's an account logged in it.
 If you need to find out the sessionid take a look at [CookiesGrabber](https://github.com/xlysander12/CookiesGrabber)

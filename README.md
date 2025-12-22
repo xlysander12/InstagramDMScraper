@@ -50,5 +50,11 @@ Live Status: Real-time feedback showing if the script is RUNNING or STALLED.
 
 Auto-Save: Gracefully saves all captured data to your text file if interrupted (Ctrl+C).
 
-What's the sessionid?
+##What's the sessionid?
 The sessionid is a unique token Instagram uses to keep you logged in. 
+
+## Force exit
+If you need to stop the fetch before it reaches the beginning of the chat, simply press `Ctrl + C`. 
+- The script will catch the interrupt signal.
+- It will automatically begin processing and saving all messages fetched up to that moment.
+- This ensures no data is lost even if you stop a massive run early.

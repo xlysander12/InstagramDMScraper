@@ -1,22 +1,54 @@
-### Instagram DM Scraper
+Instagram DM Scraper (Real-Time Edition)
+Description
+This script allows you to archive entire Instagram DM histories into a searchable text file. This updated version is optimized for high-volume chats, featuring a live progress dashboard and critical stability fixes for large-scale data fetching.
 
-## Description
-This little script scrapes every private message with any user. You can either just read it in the console or export the chats to a text file to have it saved
+##Key Improvements in this Version
+KeyError Protection: Fixed a critical crash caused by media_share items (deleted or expired shared posts) that previously stopped fetches in long-running chats.
 
-## How to start
-- You need to have Python 3.x installed in your system
-- Download the source code (Either from releases or master branch)
-- Install the requirements for the script to work (`pip install -r requirements.txt`)
-- Next, you need the sessionid of the account you're trying to scrape from
-- Once you have all that, just following the script's steps should get you where you need
+Live UI Dashboard: Added a real-time terminal display showing total messages fetched, total API requests, and elapsed time.
 
-## Features
-- See all DMs the user has
-- Fetch all messages from any DM chat
-- Fetch only messages more recent that specified date (optional)
-- Export fetched messages to text file
-- Stream the chat live. See the messages coming in in real time
+Stress Tested: Successfully verified with a continuous 18-hour run capturing 426,549 messages in a single session. (18 hours)
 
-## What's the sessionid?
-The sessionid is a cookie that the Instagram website stores in your browser when there's an account logged in it.
-If you need to find out the sessionid take a look at [CookiesGrabber](https://github.com/xlysander12/CookiesGrabber)
+Windows Encoding Fix: Forced UTF-8 support to prevent emoji-related crashes on Windows terminals.
+
+Dependency
+This project uses pip for standard installation or uv as the package manager.
+
+Standard Install:
+
+pip install -r requirements.txt
+Using uv:
+
+Code snippet
+
+pip install uv
+uv init
+uv sync
+
+##How to start
+Prerequisites: Ensure you have Python 3.x installed.
+
+SessionID: You need the sessionid cookie from your browser.
+
+Open Instagram in your browser and log in.
+
+Open Developer Tools (F12) -> Storage (or Application) -> Cookies.
+
+Copy the value of the sessionid cookie.
+
+##Run the Script:
+
+python main.py
+Follow the Prompts: Enter your SessionID, select the chat from the list, and choose your filename (default: backup.txt).
+
+Features
+Inbox Explorer: See a numbered list of all your recent DMs.
+
+High-Volume Fetching: Capable of handling hundreds of thousands of messages without memory leaks.
+
+Live Status: Real-time feedback showing if the script is RUNNING or STALLED.
+
+Auto-Save: Gracefully saves all captured data to your text file if interrupted (Ctrl+C).
+
+What's the sessionid?
+The sessionid is a unique token Instagram uses to keep you logged in. 

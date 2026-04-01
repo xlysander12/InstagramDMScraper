@@ -36,7 +36,7 @@ def main():
         if args.list is True or args.threadid is None:
             threads = IThread.fetch_threads()
             for thread in threads:
-                print(thread)
+                print(thread.print())
 
             return
 

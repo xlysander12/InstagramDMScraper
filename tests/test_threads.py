@@ -1,3 +1,6 @@
+import datetime
+
+import classes.IMessage
 from classes import IThread, IUser
 
 
@@ -28,4 +31,10 @@ class TestRequestHandler:
         if thread is None:
             return self.test_get_messages(session_fixture)
 
-        messages = thread.fetch_messages(handler=session_fixture)
+        messages = thread.fetch_messages(limit_date=datetime.datetime.fromtimestamp(1775062800), handler=session_fixture)
+
+        assert isinstance(messages, list)
+        assert len(messages) > 0
+        assert isinstance(messages[0], classes.IMessage.IMessage)
+
+        return None

@@ -21,21 +21,37 @@ class IThread:
         self.__oldest_cursor = oldest_cursor
         self.__current_cursor = current_cursor
 
-    def __str__(self):
+    def print(self):
         return f"{self.title} [{self.id}]"
 
-    def fetch_messages(self, *, verbose: bool = False, limit_date: datetime | None = None, handler=None):
+    def fetch_messages(self, *, verbose: bool = False, limit_date: datetime | None = None, handler=None, refetch: bool = False) -> list[IMessage]:
         if handler is None:
             handler = utils.request_handler
+
+        if len(self.__messages) > 0 and not refetch:
+            return self.__messages
 
         while True:
             if verbose:
                 print(colored(f"[*] Fetching messages for cursor {self.__current_cursor}", "blue"))
 
-            response: dict = handler.get_request(f"/threads/{self.id}?cursor={self.__current_cursor}")
-            messages = response["thread"]["items"]
-            pass
+            response: dict = handler.get_request(f"/threads/{self.id}?cursor={self.__current_cursor if self.__current_cursor is not None else ""}", verbose=verbose)
+            messages: list[dict] = response["thread"]["items"]
 
+            # For every fetched message, create the proper object
+            for message in messages:
+                # First, ensure the message is after the limit date if it exists
+                if (limit_date is None) or (datetime.fromtimestamp(int(message["timestamp"]) / 1000000) > limit_date):  # Again, Instagram uses MICROSECONDS for timestamps
+                    self.__messages.append(IMessage.from_json(message))
+                else:
+                    break  # Limit date was reached. Break out of loop and return messages
+
+            if response["thread"]["prev_cursor"] == "MINCURSOR" or response["thread"]["prev_cursor"] == self.__oldest_cursor:
+                break
+
+            self.__current_cursor = response["thread"]["prev_cursor"]
+
+        return self.__messages
 
     @classmethod
     def from_id(cls, thread_id: int, *, handler=None):
@@ -54,7 +70,8 @@ class IThread:
             members.append(IUser(user["id"], user["username"], user["full_name"], user["short_name"]))
 
         # Return the thread object
-        return cls(int(thread_data["thread_id"]), thread_data["thread_title"], thread_data["is_group"] == "true", members, thread_data["oldest_cursor"], thread_data["newest_cursor"])
+        # return cls(int(thread_data["thread_id"]), thread_data["thread_title"], thread_data["is_group"] == "true", members, thread_data["oldest_cursor"], thread_data["newest_cursor"])
+        return cls(int(thread_data["thread_id"]), thread_data["thread_title"], thread_data["is_group"] == "true", members, thread_data["oldest_cursor"])
 
 
 def fetch_threads(number: int = 200, *, handler=None) -> list[IThread]:

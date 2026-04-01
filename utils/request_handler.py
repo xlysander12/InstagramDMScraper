@@ -1,4 +1,5 @@
 import requests
+from termcolor import colored
 
 __HEADERS = {
     "accept": "application/json",
@@ -24,7 +25,7 @@ def set_sessionid(sessionid: str):
     __sessionid = sessionid
 
 
-def get_request(url: str, *, return_json: bool = True) -> dict | requests.Response:
+def get_request(url: str, *, verbose: bool = False, return_json: bool = True) -> dict | requests.Response:
     if not url.startswith(__BASE_API_URL) or not url.startswith(__BASE_DM_URL):
         url = f"{__BASE_DM_URL}{url}"
 
@@ -33,7 +34,13 @@ def get_request(url: str, *, return_json: bool = True) -> dict | requests.Respon
     })
 
     if not response.ok:
-        # Do something here
+        # If the text of the error is "Oops, an error occurred.", try again as Instagram's private API is volatile af
+        if response.text == "Oops, an error occurred.":
+            if verbose:
+                print(colored("[-] Instagram API threw weird 500. Trying again..."))
+
+            return get_request(url, verbose=verbose, return_json=return_json)
+
         raise Exception(f"Request failed with status code {response.status_code} - {response.text}")
 
     if return_json:

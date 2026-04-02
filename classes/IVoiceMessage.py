@@ -3,11 +3,10 @@ from classes.IMessage import IMessage
 from datetime import datetime
 
 
-class IMediaMessage(IMessage):
-    def __init__(self, id: int, sender_id: int, timestamp: datetime, type: IMediaType, url: str):
+class IVoiceMessage(IMessage):
+    def __init__(self, id: int, sender_id: int, timestamp: datetime, url: str):
         super().__init__(id, sender_id, "media", timestamp)
-        self.type = type
         self.url = url
 
     def print(self) -> str:
-        return f"{self.type.print()} -> {self.url}"
+        return f"Voice Message -> {self.url}"

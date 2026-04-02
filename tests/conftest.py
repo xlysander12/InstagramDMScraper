@@ -12,7 +12,7 @@ load_dotenv()
 
 @pytest.fixture
 def session_fixture():
-    sessionid = os.getenv("SESSIONID")
+    sessionid = os.getenv("TESTS_SESSIONID")
     if not sessionid:
         pytest.fail("SESSION_ID environment variable not set")
 

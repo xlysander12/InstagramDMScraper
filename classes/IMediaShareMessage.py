@@ -9,4 +9,4 @@ class IMediaShareMessage(IMessage):
         self.image_url = image_url
 
     def print(self) -> str:
-        return f"Media share from {self.author_username} -> {self.image_url}"
+        return f"Media share from \"{self.author_username}\" -> {self.image_url}"

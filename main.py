@@ -1,12 +1,15 @@
+import threading
+import time
+from datetime import datetime, timedelta
 import sys
 from argparse import ArgumentParser
 
 from classes import IThread
-import utils.request_handler
+from utils import request_handler, misc
 
 parser = ArgumentParser()
 
-parser.add_argument("-s" "--sessionid", dest="sessionid", type=str, help="Account's Sessionid")
+parser.add_argument("-s", "--sessionid", dest="sessionid", type=str, help="Account's Sessionid")
 parser.add_argument("-S", "--stream", dest="stream", action="store_true")
 parser.add_argument("-t", "--threadid", dest="threadid", type=int, help="Chat's Threadid")
 parser.add_argument("-v", "--verbose", dest="verbose", action="store_true")
@@ -15,35 +18,102 @@ parser.add_argument("-d", "--date", dest="date", type=str, help="Only show messa
 parser.add_argument("-l", "--list", dest="list", action="store_true", help="List all existing threads")
 
 
+def waiting_thread_function(thread: IThread.IThread):
+    try:
+        time.sleep(1)  # Wait for 1 second before starting
+        while thread.is_fetching:
+            time_difference: timedelta = datetime.now() - thread.fetch_start_time
+            hours, minutes, seconds = misc.hours_minutes_seconds_from_timedelta(time_difference)
+
+            elipsis_str: str = f"{"." * ((int(time_difference.total_seconds()) % 3) + 1)}{" " * (4 - ((int(time_difference.total_seconds()) % 3) + 1))}"
+            elapsed_time_str: str = f"{f"{hours}h" if hours != 0 else ""}{f"{minutes}m" if minutes != 0 else ""}{f"{seconds}s"}"
+            total_messages_str: str = f"{thread.num_of_messages} fetched messages in {request_handler.number_of_requests} requests"
+            rate_str: str = f"Rate: {"{:.2f}".format(thread.num_of_messages / time_difference.total_seconds())} messages/second"
+
+            print(f"Fetching messages {elipsis_str} ({elapsed_time_str}) ({total_messages_str}) ({rate_str})", end="\r")
+
+            time.sleep(1)  # Wait 1 second before looping again
+    except KeyboardInterrupt:
+        return
+
+
 def step_by_step():
     pass
 
 
-def main():
+def exec_with_args():
     # Parse the arguments
     args = parser.parse_args()
 
+    # First, check if the sessionid arg was passed, if not, return with an error saying it's necessary
+    if args.sessionid is None:
+        raise Exception("Error: Sessionid is required")
+
+    # Since the sessionid was passed, set it to the request handler
+    request_handler.set_sessionid(args.sessionid)
+
+    # Next, if the 'list' argument was passed or if no thread id was passed, show all the possible threads
+    if args.list is True or args.threadid is None:
+        threads = IThread.fetch_threads()
+        for thread in threads:
+            print(thread.print())
+
+        return
+
+    # Fetch the thread data from the id
+    thread = IThread.IThread.from_id(int(args.threadid))
+    if thread is None:
+        raise Exception("Something went wrong. Make sure the provided thread ID is valid")
+
+    # Check if the stream argument was passed, if so, start streaming the thread
+    if args.stream:
+        raise NotImplementedError("Streaming is not implemented yet")
+    else:  # Otherwise, do a proper message dump
+        # Create thread used to display the progress, if verbose is disabled
+        waiting_thread = None
+        if not args.verbose:
+            waiting_thread = threading.Thread(target=waiting_thread_function, args=(thread,))
+            waiting_thread.daemon = True
+            waiting_thread.start()
+
+        messages = thread.fetch_messages(verbose=args.verbose, limit_date=args.date)
+
+        # Build the message dump
+        dump = ""
+        for message in messages:
+            author = thread.get_member_from_id(message.sender_id)
+            author_name: str = f"{author.short_name} ({author.username})" if author is not None else "You"
+
+            dump += f"{author_name}: {message.print()} [{message.timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n"
+
+        # If an output file was given, write to it, otherwise, output the dump to the terminal
+        if args.output is not None:
+            with open(args.output, "w") as f:
+                f.write(dump)
+        else:
+            if waiting_thread is not None:
+                while waiting_thread.is_alive():
+                    pass
+                else:
+                    # Clear the first line of the output to ensure clean output
+                    print(" " * 80, end="\r")
+
+            print(dump)
+
+            # Output finished message
+            delta: timedelta = datetime.now() - thread.fetch_start_time
+            hours, minutes, seconds = misc.hours_minutes_seconds_from_timedelta(delta)
+
+            elapsed_time_str: str = f"{f"{hours} hours" if hours != 0 else ""}{f"{minutes} minutes" if minutes != 0 else ""}{f"{seconds} seconds" if seconds != 0 else ""}"
+            print(f"Fetching ended! A total of {thread.num_of_messages} messages were fetched in {elapsed_time_str} with {request_handler.number_of_requests} requests to the API and an average of {"{:.2f}".format(thread.num_of_messages / delta.total_seconds())} messages/second")
+
+
+def main():
     # If arguments were passed, execute the program with the arguments
     if len(sys.argv) > 1:
-        # First, check if the sessionid arg was passed, if not, return with an error saying it's necessary
-        if args.sessionid is None:
-            raise Exception("Error: Sessionid is required")
-
-        # Since the sessionid was passed, set it to the request handler
-        utils.request_handler.set_sessionid(args.sessionid)
-
-        # Next, if the 'list' argument was passed or if no thread id was passed, show all the possible threads
-        if args.list is True or args.threadid is None:
-            threads = IThread.fetch_threads()
-            for thread in threads:
-                print(thread.print())
-
-            return
-
-        # Fetch the thread data from the id
-        thread = IThread.IThread.from_id(int(args.threadid))
-        if thread is None:
-            raise Exception("Something went wrong. Make sure the provided thread ID is valid")
+        exec_with_args()
+    else:
+        step_by_step()
 
 
 if __name__ == "__main__":

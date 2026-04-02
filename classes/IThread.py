@@ -1,3 +1,4 @@
+import collections.abc
 from datetime import datetime
 
 from termcolor import colored
@@ -12,6 +13,9 @@ class IThread:
     __oldest_cursor: str | None = None
     __messages: list[IMessage] = []
 
+    __is_fetching: bool = False
+    __fetch_start_time: datetime | None = None
+
     def __init__(self, id: int, title: str, is_group: bool, members: list[IUser] | None = None, oldest_cursor: str | None = None, current_cursor: str | None = None):
         self.id: int = id
         self.title: str = title
@@ -21,8 +25,27 @@ class IThread:
         self.__oldest_cursor = oldest_cursor
         self.__current_cursor = current_cursor
 
+    @property
+    def is_fetching(self):
+        return self.__is_fetching
+
+    @property
+    def fetch_start_time(self):
+        return self.__fetch_start_time
+
+    @property
+    def num_of_messages(self) -> int:
+        return len(self.__messages)
+
     def print(self):
         return f"{self.title} [{self.id}]"
+
+    def message_exists(self, other_message: IMessage) -> bool:
+        for message in self.__messages:
+            if message == other_message:
+                return True
+
+        return False
 
     def fetch_messages(self, *, verbose: bool = False, limit_date: datetime | None = None, handler=None, refetch: bool = False) -> list[IMessage]:
         if handler is None:
@@ -30,6 +53,9 @@ class IThread:
 
         if len(self.__messages) > 0 and not refetch:
             return self.__messages
+
+        self.__is_fetching = True
+        self.__fetch_start_time = datetime.now()
 
         while True:
             if verbose:
@@ -42,16 +68,53 @@ class IThread:
             for message in messages:
                 # First, ensure the message is after the limit date if it exists
                 if (limit_date is None) or (datetime.fromtimestamp(int(message["timestamp"]) / 1000000) > limit_date):  # Again, Instagram uses MICROSECONDS for timestamps
+                    # Create message object
+                    message_object = IMessage.from_json(message)
+
+                    # Ensure the message is not repeated
+                    if self.message_exists(message_object):
+                        if verbose:
+                            print(colored(f"[-] Repeated message... Moving on... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
+                        continue
+
                     self.__messages.append(IMessage.from_json(message))
-                else:
-                    break  # Limit date was reached. Break out of loop and return messages
+                    if verbose:
+                        print(colored(f"[+] Message is valid. Moving to next message... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "green"))
+
+                else:  # Limit date was reached. Break out of loop and return messages
+                    if verbose:
+                        print(colored(f"[-] Message timestamp is older than given limit. Canceling checks... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
+
+                    break
 
             if response["thread"]["prev_cursor"] == "MINCURSOR" or response["thread"]["prev_cursor"] == self.__oldest_cursor:
                 break
 
-            self.__current_cursor = response["thread"]["prev_cursor"]
+            try:
+                self.__current_cursor = response["thread"]["prev_cursor"]
+            except KeyError:
+                self.__current_cursor = self.__oldest_cursor
+
+        self.__is_fetching = False
+
+        # Sort all messages by timestamp, from oldest to most recent
+        self.__messages.sort(key=lambda m: m.timestamp)
 
         return self.__messages
+
+    def stream_messages(self, *, handler=None):
+        if handler is None:
+            handler = utils.request_handler
+
+        # Get the first batch of messages
+        pass
+
+    def get_member_from_id(self, id: int):
+        for member in self.members:
+            if member.id == id:
+                return member
+
+        return None
 
     @classmethod
     def from_id(cls, thread_id: int, *, handler=None):
@@ -67,7 +130,7 @@ class IThread:
         # Create list of members
         members: list[IUser] = []
         for user in thread_data["users"]:
-            members.append(IUser(user["id"], user["username"], user["full_name"], user["short_name"]))
+            members.append(IUser(int(user["id"]), user["username"], user["full_name"], user["short_name"]))
 
         # Return the thread object
         # return cls(int(thread_data["thread_id"]), thread_data["thread_title"], thread_data["is_group"] == "true", members, thread_data["oldest_cursor"], thread_data["newest_cursor"])

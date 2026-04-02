@@ -1,15 +1,23 @@
-from abc import ABC, abstractmethod
 from datetime import datetime
 
+from classes.IMediaType import IMediaType
 
-class IMessage(ABC):
+
+class IMessage:
     def __init__(self, id: int, sender_id: int, type: str, timestamp: datetime):
         self.id = id
         self.sender_id = sender_id
         self.type = type
         self.timestamp = timestamp
 
-    @abstractmethod
+    def __init_subclass__(cls):
+        super().__init_subclass__()
+        if cls.print is IMessage.print:
+            raise TypeError(f"{cls.__name__} must override print()")
+
+    def __eq__(self, other):
+        return self.id == other.id
+
     def print(self) -> str:
         return f"[{self.type}] {self.id}"
 
@@ -72,8 +80,9 @@ class IMessage(ABC):
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
-                    datetime.fromtimestamp(int(media_data["url_expire_at_secs"])),
-                    media_data["image_versions2"]["candidates"][0]["url"] if media_data["media_type"] == 1 else media_data["video_versions"][0]["url"]
+                    IMediaType.from_number(int(media_data["media_type"])),
+                    datetime.fromtimestamp(int(media_data["url_expire_at_secs"]) if media_data["url_expire_at_secs"] is not None else 0),
+                    media_data.get("image_versions2", {}).get("candidates", [{}])[0].get("url") if media_data["media_type"] == 1 else media_data.get("video_versions", [{}])[0].get("url")
                 )
 
             case "media":  # Permanent media
@@ -84,7 +93,19 @@ class IMessage(ABC):
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
+                    IMediaType.from_number(int(media_data["media_type"])),
                     media_data["image_versions2"]["candidates"][0]["url"] if media_data["media_type"] == 1 else media_data["video_versions"][0]["url"]
+                )
+
+            case "voice_media":
+                from classes.IVoiceMessage import IVoiceMessage
+
+                voice_data: dict = json_data["voice_media"]["media"]
+                return IVoiceMessage(
+                    int(json_data["item_id"]),
+                    int(json_data["user_id"]),
+                    datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
+                    voice_data["audio"]["audio_src"]
                 )
 
             case _:

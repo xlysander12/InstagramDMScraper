@@ -1,4 +1,5 @@
 import datetime
+import os
 
 import classes.IMessage
 from classes import IThread, IUser
@@ -13,7 +14,7 @@ class TestRequestHandler:
         assert isinstance(result[0], IThread.IThread)
 
     def test_get_thread_by_id(self, session_fixture):
-        result = IThread.IThread.from_id(340282366841710301244260043370061655929, handler=session_fixture)
+        result = IThread.IThread.from_id(os.getenv("TESTS_THREADID"), handler=session_fixture)
 
         # The result is either a Thread or None
         assert isinstance(result, IThread.IThread) or isinstance(result, type(None))
@@ -27,7 +28,7 @@ class TestRequestHandler:
             assert isinstance(result.members[0], IUser.IUser)
 
     def test_get_messages(self, session_fixture):
-        thread = IThread.IThread.from_id(340282366841710301244260043370061655929, handler=session_fixture)
+        thread = IThread.IThread.from_id(os.getenv("TESTS_THREADID"), handler=session_fixture)
         if thread is None:
             return self.test_get_messages(session_fixture)
 

@@ -19,6 +19,8 @@ __BASE_DM_URL = f"{__BASE_API_URL}/direct_v2"
 
 __sessionid: str = ""
 
+number_of_requests: int = 0
+
 
 def set_sessionid(sessionid: str):
     global __sessionid
@@ -26,6 +28,9 @@ def set_sessionid(sessionid: str):
 
 
 def get_request(url: str, *, verbose: bool = False, return_json: bool = True) -> dict | requests.Response:
+    global number_of_requests
+    number_of_requests += 1
+
     if not url.startswith(__BASE_API_URL) or not url.startswith(__BASE_DM_URL):
         url = f"{__BASE_DM_URL}{url}"
 
@@ -35,7 +40,7 @@ def get_request(url: str, *, verbose: bool = False, return_json: bool = True) ->
 
     if not response.ok:
         # If the text of the error is "Oops, an error occurred.", try again as Instagram's private API is volatile af
-        if response.text == "Oops, an error occurred.":
+        if response.text.startswith("Oops, an error occurred."):
             if verbose:
                 print(colored("[-] Instagram API threw weird 500. Trying again..."))
 

@@ -1,6 +1,7 @@
 import os.path
 import threading
 import time
+import traceback
 from datetime import datetime, timedelta
 import sys
 from argparse import ArgumentParser
@@ -26,19 +27,19 @@ dumping_group.add_argument("-d", "--date", dest="date", type=str, help="Only sho
 
 def waiting_thread_function(thread: IThread.IThread):
     try:
-        time.sleep(1)  # Wait for 1 second before starting
+        time.sleep(0.5)  # Wait for 1 second before starting
         while thread.is_fetching:
             time_difference: timedelta = datetime.now() - thread.fetch_start_time
             hours, minutes, seconds = misc.hours_minutes_seconds_from_timedelta(time_difference)
 
             elipsis_str: str = f"{"." * ((int(time_difference.total_seconds()) % 3) + 1)}{" " * (4 - ((int(time_difference.total_seconds()) % 3) + 1))}"
-            elapsed_time_str: str = f"{f"{hours}h" if hours != 0 else ""}{f"{minutes}m" if minutes != 0 else ""}{f"{seconds}s"}"
+            elapsed_time_str: str = f"{f"{hours}h " if hours != 0 else ""}{f"{minutes}m " if minutes != 0 else ""}{f"{seconds}s"}"
             total_messages_str: str = f"{thread.num_of_messages} fetched messages in {request_handler.number_of_requests} requests"
             rate_str: str = f"Rate: {"{:.2f}".format(thread.num_of_messages / time_difference.total_seconds())} messages/second"
 
             print(f"Fetching messages {elipsis_str} ({elapsed_time_str}) ({total_messages_str}) ({rate_str})", end="\r")
 
-            time.sleep(1)  # Wait 1 second before looping again
+            time.sleep(0.5)  # Wait 1 second before looping again
     except KeyboardInterrupt:
         return
 
@@ -65,7 +66,18 @@ def dump_messages(thread: IThread.IThread, verbose: bool, limit_date: datetime |
         waiting_thread.daemon = True
         waiting_thread.start()
 
-    messages = thread.fetch_messages(verbose=verbose, limit_date=limit_date)
+    try:
+        messages = thread.fetch_messages(verbose=verbose, limit_date=limit_date)
+    except:
+        if waiting_thread is not None:
+            while waiting_thread.is_alive():
+                pass
+            else:
+                # Clear the first line of the output to ensure clean output
+                print(" " * 80, end="\r")
+
+        print(f"An error occurred while fetching messages: {traceback.format_exc()}\nDumping fetched messages...")
+        messages = thread.fetch_messages()  # This will return the already fetched messages
 
     # Build the message dump
     dump = ""
@@ -88,12 +100,11 @@ def dump_messages(thread: IThread.IThread, verbose: bool, limit_date: datetime |
                 print(" " * 80, end="\r")
 
         print(dump)
-
         # Output finished message
         delta: timedelta = datetime.now() - thread.fetch_start_time
         hours, minutes, seconds = misc.hours_minutes_seconds_from_timedelta(delta)
 
-        elapsed_time_str: str = f"{f"{hours} hours" if hours != 0 else ""}{f"{minutes} minutes" if minutes != 0 else ""}{f"{seconds} seconds" if seconds != 0 else ""}"
+        elapsed_time_str: str = f"{f"{hours} hours " if hours != 0 else ""}{f"{minutes} minutes " if minutes != 0 else ""}{f"{seconds} seconds" if seconds != 0 else ""}"
         print(f"Fetching ended! A total of {thread.num_of_messages} messages were fetched in {elapsed_time_str} with {request_handler.number_of_requests} requests to the API and an average of {"{:.2f}".format(thread.num_of_messages / delta.total_seconds())} messages/second")
 
 

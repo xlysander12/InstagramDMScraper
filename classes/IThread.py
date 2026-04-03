@@ -53,48 +53,54 @@ class IThread:
             handler = utils.request_handler
 
         if len(self.__messages) > 0 and not refetch:
+            # Sort the messages
+            self.__messages.sort(key=lambda m: m.timestamp)
             return self.__messages
 
         self.__is_fetching = True
         self.__fetch_start_time = datetime.now()
 
-        while True:
-            if verbose:
-                print(colored(f"[*] Fetching messages for cursor {self.__current_cursor}", "blue"))
+        try:
+            while True:
+                if verbose:
+                    print(colored(f"[*] Fetching messages for cursor {self.__current_cursor}", "blue"))
 
-            response: dict = handler.get_request(f"/threads/{self.id}?cursor={self.__current_cursor if self.__current_cursor is not None else ""}", verbose=verbose)
-            messages: list[dict] = response["thread"]["items"]
+                response: dict = handler.get_request(f"/threads/{self.id}?cursor={self.__current_cursor if self.__current_cursor is not None else ""}", verbose=verbose)
+                messages: list[dict] = response["thread"]["items"]
 
-            # For every fetched message, create the proper object
-            for message in messages:
-                # First, ensure the message is after the limit date if it exists
-                if (limit_date is None) or (datetime.fromtimestamp(int(message["timestamp"]) / 1000000) > limit_date):  # Again, Instagram uses MICROSECONDS for timestamps
-                    # Create message object
-                    message_object = IMessage.from_json(message)
+                # For every fetched message, create the proper object
+                for message in messages:
+                    # First, ensure the message is after the limit date if it exists
+                    if (limit_date is None) or (datetime.fromtimestamp(int(message["timestamp"]) / 1000000) > limit_date):  # Again, Instagram uses MICROSECONDS for timestamps
+                        # Create message object
+                        message_object = IMessage.from_json(message)
 
-                    # Ensure the message is not repeated
-                    if self.message_exists(message_object):
+                        # Ensure the message is not repeated
+                        if self.message_exists(message_object):
+                            if verbose:
+                                print(colored(f"[-] Repeated message... Moving on... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
+                            continue
+
+                        self.__messages.append(IMessage.from_json(message))
                         if verbose:
-                            print(colored(f"[-] Repeated message... Moving on... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
-                        continue
+                            print(colored(f"[+] Message is valid. Moving to next message... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "green"))
 
-                    self.__messages.append(IMessage.from_json(message))
-                    if verbose:
-                        print(colored(f"[+] Message is valid. Moving to next message... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "green"))
+                    else:  # Limit date was reached. Break out of loop and return messages
+                        if verbose:
+                            print(colored(f"[-] Message timestamp is older than given limit. Canceling checks... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
 
-                else:  # Limit date was reached. Break out of loop and return messages
-                    if verbose:
-                        print(colored(f"[-] Message timestamp is older than given limit. Canceling checks... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
+                        break
 
+                if response["thread"]["prev_cursor"] == "MINCURSOR" or response["thread"]["prev_cursor"] == self.__oldest_cursor:
                     break
 
-            if response["thread"]["prev_cursor"] == "MINCURSOR" or response["thread"]["prev_cursor"] == self.__oldest_cursor:
-                break
-
-            try:
-                self.__current_cursor = response["thread"]["prev_cursor"]
-            except KeyError:
-                self.__current_cursor = self.__oldest_cursor
+                try:
+                    self.__current_cursor = response["thread"]["prev_cursor"]
+                except KeyError:
+                    self.__current_cursor = self.__oldest_cursor
+        except Exception as e:
+            self.__is_fetching = False
+            raise e
 
         self.__is_fetching = False
 

@@ -43,21 +43,26 @@ class IMessage:
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
                     clip_data["user"]["username"],
-                    clip_data["caption"]["text"],
+                    clip_data["caption"]["text"] if hasattr(clip_data, "caption") else None,
                     clip_data["video_versions"][0]["url"]
                 )
 
             case "story_share":
                 from classes.IStoryShareMessage import IStoryShareMessage
 
-                story_data: dict = json_data["story_share"]["media"]
+                story_data: dict | None = None
+                try:
+                    story_data: dict = json_data["story_share"]["media"]
+                except KeyError:
+                    pass
+
                 return IStoryShareMessage(
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
-                    story_data["user"]["username"],
-                    story_data["caption"]["text"],
-                    story_data["video_versions"][0]["url"]
+                    story_data["user"]["username"] if story_data is not None and hasattr(story_data, "user") else None,
+                    story_data["caption"]["text"] if story_data is not None and hasattr(story_data, "caption") else None,
+                    story_data["video_versions"][0]["url"] if story_data is not None and hasattr(story_data, "video_versions") else None
                 )
 
             case "media_share":
@@ -68,7 +73,7 @@ class IMessage:
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
-                    media_data["user"]["username"],
+                    media_data["user"]["username"] if hasattr(media_data, "user") else None,
                     media_data["image_versions2"]["candidates"][0]["url"]
                 )
 

@@ -42,6 +42,61 @@ def waiting_thread_function(thread: IThread.IThread):
         return
 
 
+def stream_thread(thread: IThread.IThread, interval: int):
+    try:
+        print(f"Starting streaming of thread {thread.id} with interval of {interval} seconds. Press Ctrl+C to stop")
+        for new_messages in thread.stream_messages(interval):
+            for message in new_messages:
+                author = thread.get_member_from_id(message.sender_id)
+                author_name: str = f"{author.short_name} ({author.username})" if author is not None else "You"
+
+                print(f"{author_name}: {message.print()} [{message.timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
+    except KeyboardInterrupt:
+        print(f"Streaming terminated! Fetched a total of {thread.num_of_messages} messages with {request_handler.number_of_requests} requests to the API")
+        return
+
+
+def dump_messages(thread: IThread.IThread, verbose: bool, limit_date: datetime | None, output_file: str | None):
+    # Create thread used to display the progress, if verbose is disabled
+    waiting_thread = None
+    if not verbose:
+        waiting_thread = threading.Thread(target=waiting_thread_function, args=(thread,))
+        waiting_thread.daemon = True
+        waiting_thread.start()
+
+    messages = thread.fetch_messages(verbose=verbose, limit_date=limit_date)
+
+    # Build the message dump
+    dump = ""
+    for message in messages:
+        author = thread.get_member_from_id(message.sender_id)
+        author_name: str = f"{author.short_name} ({author.username})" if author is not None else "You"
+
+        dump += f"{author_name}: {message.print()} [{message.timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n"
+
+    # If an output file was given, write to it, otherwise, output the dump to the terminal
+    if output_file is not None:
+        with open(output_file, "w") as f:
+            f.write(dump)
+    else:
+        if waiting_thread is not None:
+            while waiting_thread.is_alive():
+                pass
+            else:
+                # Clear the first line of the output to ensure clean output
+                print(" " * 80, end="\r")
+
+        print(dump)
+
+        # Output finished message
+        delta: timedelta = datetime.now() - thread.fetch_start_time
+        hours, minutes, seconds = misc.hours_minutes_seconds_from_timedelta(delta)
+
+        elapsed_time_str: str = f"{f"{hours} hours" if hours != 0 else ""}{f"{minutes} minutes" if minutes != 0 else ""}{f"{seconds} seconds" if seconds != 0 else ""}"
+        print(
+            f"Fetching ended! A total of {thread.num_of_messages} messages were fetched in {elapsed_time_str} with {request_handler.number_of_requests} requests to the API and an average of {"{:.2f}".format(thread.num_of_messages / delta.total_seconds())} messages/second")
+
+
 def step_by_step():
     pass
 
@@ -72,56 +127,10 @@ def exec_with_args():
 
     # Check if the stream argument was passed, if so, start streaming the thread
     if args.stream:
-        try:
-            print(f"Starting streaming of thread {thread.id} with interval of {args.interval} seconds. Press Ctrl+C to stop")
-            for new_messages in thread.stream_messages(args.interval):
-                for message in new_messages:
-                    author = thread.get_member_from_id(message.sender_id)
-                    author_name: str = f"{author.short_name} ({author.username})" if author is not None else "You"
-
-                    print(f"{author_name}: {message.print()} [{message.timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
-        except KeyboardInterrupt:
-            print(f"Streaming terminated! Fetched a total of {thread.num_of_messages} messages with {request_handler.number_of_requests} requests to the API")
-            return
+        stream_thread(thread, args.interval)
 
     else:  # Otherwise, do a proper message dump
-        # Create thread used to display the progress, if verbose is disabled
-        waiting_thread = None
-        if not args.verbose:
-            waiting_thread = threading.Thread(target=waiting_thread_function, args=(thread,))
-            waiting_thread.daemon = True
-            waiting_thread.start()
-
-        messages = thread.fetch_messages(verbose=args.verbose, limit_date=args.date)
-
-        # Build the message dump
-        dump = ""
-        for message in messages:
-            author = thread.get_member_from_id(message.sender_id)
-            author_name: str = f"{author.short_name} ({author.username})" if author is not None else "You"
-
-            dump += f"{author_name}: {message.print()} [{message.timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n"
-
-        # If an output file was given, write to it, otherwise, output the dump to the terminal
-        if args.output is not None:
-            with open(args.output, "w") as f:
-                f.write(dump)
-        else:
-            if waiting_thread is not None:
-                while waiting_thread.is_alive():
-                    pass
-                else:
-                    # Clear the first line of the output to ensure clean output
-                    print(" " * 80, end="\r")
-
-            print(dump)
-
-            # Output finished message
-            delta: timedelta = datetime.now() - thread.fetch_start_time
-            hours, minutes, seconds = misc.hours_minutes_seconds_from_timedelta(delta)
-
-            elapsed_time_str: str = f"{f"{hours} hours" if hours != 0 else ""}{f"{minutes} minutes" if minutes != 0 else ""}{f"{seconds} seconds" if seconds != 0 else ""}"
-            print(f"Fetching ended! A total of {thread.num_of_messages} messages were fetched in {elapsed_time_str} with {request_handler.number_of_requests} requests to the API and an average of {"{:.2f}".format(thread.num_of_messages / delta.total_seconds())} messages/second")
+        dump_messages(thread, args.verbose, args.date, args.output)
 
 
 def main():

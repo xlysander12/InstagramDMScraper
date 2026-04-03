@@ -10,12 +10,17 @@ from utils import request_handler, misc
 parser = ArgumentParser()
 
 parser.add_argument("-s", "--sessionid", dest="sessionid", type=str, help="Account's Sessionid")
-parser.add_argument("-S", "--stream", dest="stream", action="store_true")
 parser.add_argument("-t", "--threadid", dest="threadid", type=int, help="Chat's Threadid")
-parser.add_argument("-v", "--verbose", dest="verbose", action="store_true")
-parser.add_argument("-o", "--output", dest="output", type=str, help="Outfile file path")
-parser.add_argument("-d", "--date", dest="date", type=str, help="Only show messages AFTER this date. Can either be a ISO String or Unix Timestamp")
 parser.add_argument("-l", "--list", dest="list", action="store_true", help="List all existing threads")
+
+streaming_group = parser.add_argument_group("Streaming options")
+streaming_group.add_argument("-S", "--stream", dest="stream", action="store_true", help="Stream the chat instead of dumping contents. Updates in real time")
+streaming_group.add_argument("-i", "--interval", dest="interval", default=10, help="Number of seconds between each message check. Lower values may trigger rate limits. Default: 10")
+
+dumping_group = parser.add_argument_group("Dump options")
+dumping_group.add_argument("-v", "--verbose", dest="verbose", action="store_true")
+dumping_group.add_argument("-o", "--output", dest="output", type=str, help="Outfile file path")
+dumping_group.add_argument("-d", "--date", dest="date", type=str, help="Only show messages AFTER this date. Can either be a ISO String or Unix Timestamp")
 
 
 def waiting_thread_function(thread: IThread.IThread):
@@ -67,7 +72,18 @@ def exec_with_args():
 
     # Check if the stream argument was passed, if so, start streaming the thread
     if args.stream:
-        raise NotImplementedError("Streaming is not implemented yet")
+        try:
+            print(f"Starting streaming of thread {thread.id} with interval of {args.interval} seconds. Press Ctrl+C to stop")
+            for new_messages in thread.stream_messages(args.interval):
+                for message in new_messages:
+                    author = thread.get_member_from_id(message.sender_id)
+                    author_name: str = f"{author.short_name} ({author.username})" if author is not None else "You"
+
+                    print(f"{author_name}: {message.print()} [{message.timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]")
+        except KeyboardInterrupt:
+            print(f"Streaming terminated! Fetched a total of {thread.num_of_messages} messages with {request_handler.number_of_requests} requests to the API")
+            return
+
     else:  # Otherwise, do a proper message dump
         # Create thread used to display the progress, if verbose is disabled
         waiting_thread = None

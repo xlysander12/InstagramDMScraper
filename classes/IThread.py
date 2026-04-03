@@ -1,4 +1,5 @@
 import collections.abc
+import time
 from datetime import datetime
 
 from termcolor import colored
@@ -102,12 +103,50 @@ class IThread:
 
         return self.__messages
 
-    def stream_messages(self, *, handler=None):
+    def stream_messages(self, interval, *, handler=None):
         if handler is None:
             handler = utils.request_handler
 
         # Get the first batch of messages
-        pass
+        response: dict = handler.get_request(f"/threads/{self.id}")
+        messages = response["thread"]["items"]
+
+        # Add each message to the thread's messages list
+        for message in messages:
+            message_object = IMessage.from_json(message)
+            self.__messages.append(message_object)
+
+        # Order the messages
+        self.__messages.sort(key=lambda m: m.timestamp)
+
+        # Yield initially fetched messages
+        yield self.__messages
+
+        # Infinite loop that fetches new messages every 'interval' seconds
+        time.sleep(interval)  # Initial timeout
+        while True:
+            response: dict = handler.get_request(f"/threads/{self.id}")
+            messages = response["thread"]["items"]
+
+            # Remove any duplicates from the list and store the new ones seperately
+            new_messages: list[IMessage] = []
+            for message in messages:
+                message_object = IMessage.from_json(message)
+
+                if self.message_exists(message_object):
+                    continue
+
+                new_messages.append(message_object)
+
+            # Sort all new messages
+            new_messages.sort(key=lambda m: m.timestamp)
+
+            # Yield all new messages and update the total messages in object
+            yield new_messages
+            self.__messages.extend(new_messages)
+
+            # Wait for 'interval' seconds
+            time.sleep(interval)
 
     def get_member_from_id(self, id: int):
         for member in self.members:

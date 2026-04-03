@@ -1,3 +1,4 @@
+import os.path
 import threading
 import time
 from datetime import datetime, timedelta
@@ -20,7 +21,7 @@ streaming_group.add_argument("-i", "--interval", dest="interval", default=10, he
 dumping_group = parser.add_argument_group("Dump options")
 dumping_group.add_argument("-v", "--verbose", dest="verbose", action="store_true")
 dumping_group.add_argument("-o", "--output", dest="output", type=str, help="Outfile file path")
-dumping_group.add_argument("-d", "--date", dest="date", type=str, help="Only show messages AFTER this date. Can either be a ISO String or Unix Timestamp")
+dumping_group.add_argument("-d", "--date", dest="date", type=str, help="Only show messages AFTER this date. Format: 'dd/mm/yyyy[@hh:MM:ss]'")
 
 
 def waiting_thread_function(thread: IThread.IThread):
@@ -93,12 +94,69 @@ def dump_messages(thread: IThread.IThread, verbose: bool, limit_date: datetime |
         hours, minutes, seconds = misc.hours_minutes_seconds_from_timedelta(delta)
 
         elapsed_time_str: str = f"{f"{hours} hours" if hours != 0 else ""}{f"{minutes} minutes" if minutes != 0 else ""}{f"{seconds} seconds" if seconds != 0 else ""}"
-        print(
-            f"Fetching ended! A total of {thread.num_of_messages} messages were fetched in {elapsed_time_str} with {request_handler.number_of_requests} requests to the API and an average of {"{:.2f}".format(thread.num_of_messages / delta.total_seconds())} messages/second")
+        print(f"Fetching ended! A total of {thread.num_of_messages} messages were fetched in {elapsed_time_str} with {request_handler.number_of_requests} requests to the API and an average of {"{:.2f}".format(thread.num_of_messages / delta.total_seconds())} messages/second")
 
 
 def step_by_step():
-    pass
+    # Get the sessionid and apply it to the handler
+    sessionid = input("Account's SessionID: ")
+    request_handler.set_sessionid(sessionid)
+
+    # Ask user if they want to see available threads
+    check_threads = input("See chats list (y/N): ")
+    if check_threads.lower() == "y":
+        existing_threads = IThread.fetch_threads()
+
+        for thread in existing_threads:
+            print(thread.print())
+
+    # Get the thread id
+    thread_id = input("Thread ID: ")
+    thread = IThread.IThread.from_id(thread_id)
+    if thread is None:  # Ensure thread exists
+        raise Exception("Something went wrong. Make sure the provided thread ID is valid")
+
+    # Get the action (dump or stream)
+    action = int(input("(1) Dump chat log\n(2) Stream chat\n> "))
+    if action == 1:  # Dump selected
+        # Ask if verbose
+        enable_verbose: bool = input("Verbose (y/N): ").lower() == "y"
+
+        # Ask if export
+        while True:
+            enable_export: bool = input("Export to file (y/N): ").lower() == "y"
+            export_path = None
+            if enable_export:
+                export_path: str = input("Export file path: ")
+
+                # Check if file already exists
+                if os.path.exists(export_path):
+                    # If it does, make sure user wants to overwrite it
+                    overwrite: bool = input("File already exists. Overwrite? (y/N) ") == "y"
+
+                    if overwrite:
+                        os.remove(export_path)
+                        break
+                    else:
+                        continue
+            else:
+                break
+
+        # Ask for limit date
+        limit_date_answer: str = input("Limit date (dd/mm/aa[@hh:mm:ss]) (leave empty for none): ")
+        limit_date = None
+        if limit_date_answer != "":
+            if limit_date_answer.split("@") > 1:
+                limit_date: datetime = datetime.strptime(limit_date_answer, "%d/%m/%Y@%H:%M:%S")
+            else:
+                limit_date: datetime = datetime.strptime(limit_date_answer, "%d/%m/%Y")
+
+        dump_messages(thread, enable_verbose, limit_date, export_path)
+    else:  # Stream selected
+        interval_str: str = input("Interval (seconds between captures) (default 10): ")
+        interval: int = int(interval_str if interval_str != "" else 10)
+
+        stream_thread(thread, interval)
 
 
 def exec_with_args():

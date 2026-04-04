@@ -1,4 +1,5 @@
 .idea/
 .venv/
 .env
+.actrc
 .output/

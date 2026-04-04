@@ -42,7 +42,7 @@ def get_request(url: str, *, verbose: bool = False, return_json: bool = True) ->
         # If the text of the error is "Oops, an error occurred.", try again as Instagram's private API is volatile af
         if response.text.startswith("Oops, an error occurred."):
             if verbose:
-                print(colored("[-] Instagram API threw weird 500. Trying again..."))
+                print(colored("[-] Instagram API threw weird 500. Trying again...", "red"))
 
             return get_request(url, verbose=verbose, return_json=return_json)
 

@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 import sys
 from argparse import ArgumentParser
 
+from termcolor import colored
+
 from classes import IThread
 from utils import request_handler, misc
 
@@ -26,22 +28,22 @@ dumping_group.add_argument("-d", "--date", dest="date", type=str, help="Only sho
 
 
 def waiting_thread_function(thread: IThread.IThread):
-    try:
-        time.sleep(0.5)  # Wait for 1 second before starting
-        while thread.is_fetching:
-            time_difference: timedelta = datetime.now() - thread.fetch_start_time
-            hours, minutes, seconds = misc.hours_minutes_seconds_from_timedelta(time_difference)
+    last_size_str: int = 0
+    while not thread.done_fetching:
+        time_difference: timedelta = datetime.now() - (thread.fetch_start_time if thread.fetch_start_time is not None else datetime.now())
+        hours, minutes, seconds = misc.hours_minutes_seconds_from_timedelta(time_difference)
 
-            elipsis_str: str = f"{"." * ((int(time_difference.total_seconds()) % 3) + 1)}{" " * (4 - ((int(time_difference.total_seconds()) % 3) + 1))}"
-            elapsed_time_str: str = f"{f"{hours}h " if hours != 0 else ""}{f"{minutes}m " if minutes != 0 else ""}{f"{seconds}s"}"
-            total_messages_str: str = f"{thread.num_of_messages} fetched messages in {request_handler.number_of_requests} requests"
-            rate_str: str = f"Rate: {"{:.2f}".format(thread.num_of_messages / time_difference.total_seconds())} messages/second"
+        fetched_str: str = f"Fetched: {thread.num_of_messages}"
+        requests_str: str = f"Requests: {request_handler.number_of_requests}"
+        rate_str: str = f"Rate: {"{:.2f}".format(thread.num_of_messages / time_difference.total_seconds())} messages/second"
+        elapsed_time_str: str = f"Time: {hours}:{minutes}:{seconds}"
 
-            print(f"Fetching messages {elipsis_str} ({elapsed_time_str}) ({total_messages_str}) ({rate_str})", end="\r")
+        output: str = f"Status: RUNNING | " + " | ".join([fetched_str, requests_str, rate_str, elapsed_time_str])
 
-            time.sleep(0.5)  # Wait 1 second before looping again
-    except KeyboardInterrupt:
-        return
+        print((" " * last_size_str) + "\r" + output, end="\r", flush=True)
+        last_size_str = len(output)
+
+        time.sleep(0.5)  # Wait half a second before looping again
 
 
 def stream_thread(thread: IThread.IThread, interval: int):
@@ -62,22 +64,25 @@ def dump_messages(thread: IThread.IThread, verbose: bool, limit_date: datetime |
     # Create thread used to display the progress, if verbose is disabled
     waiting_thread = None
     if not verbose:
-        waiting_thread = threading.Thread(target=waiting_thread_function, args=(thread,))
-        waiting_thread.daemon = True
+        waiting_thread = threading.Thread(target=waiting_thread_function, args=(thread,), daemon=True)
         waiting_thread.start()
 
     try:
         messages = thread.fetch_messages(verbose=verbose, limit_date=limit_date)
-    except:
+    except BaseException as e:
         if waiting_thread is not None:
             while waiting_thread.is_alive():
                 pass
             else:
                 # Clear the first line of the output to ensure clean output
-                print(" " * 80, end="\r")
+                print(" " * 100, end="\r")
 
-        print(f"An error occurred while fetching messages: {traceback.format_exc()}\nDumping fetched messages...")
-        messages = thread.fetch_messages()  # This will return the already fetched messages
+        if isinstance(e, KeyboardInterrupt):
+            print("Dumping interrupted by user! Dumping fetched messages...")
+        else:
+            print(f"An error occurred while fetching messages:\n{traceback.format_exc()}\nDumping fetched messages...")
+
+        messages = thread.fetch_messages(use_stored=True)  # This will return the already fetched messages
 
     # Build the message dump
     dump = ""
@@ -190,9 +195,15 @@ def exec_with_args():
         return
 
     # Fetch the thread data from the id
+    if args.verbose:
+        print(colored("[*] Trying to fetch the Thread's data", "blue"))
+
     thread = IThread.IThread.from_id(int(args.threadid))
     if thread is None:
         raise Exception("Something went wrong. Make sure the provided thread ID is valid")
+
+    if args.verbose:
+        print(colored("[+] Fecthed Thread's data", "green"))
 
     # Check if the stream argument was passed, if so, start streaming the thread
     if args.stream:

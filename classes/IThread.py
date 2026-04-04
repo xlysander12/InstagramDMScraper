@@ -14,7 +14,7 @@ class IThread:
     __oldest_cursor: str | None = None
     __messages: list[IMessage] = []
 
-    __is_fetching: bool = False
+    __done_fetching: bool = False
     __fetch_start_time: datetime | None = None
 
     def __init__(self, id: int, title: str, is_group: bool, members: list[IUser] | None = None, oldest_cursor: str | None = None, current_cursor: str | None = None):
@@ -27,8 +27,8 @@ class IThread:
         self.__current_cursor = current_cursor
 
     @property
-    def is_fetching(self):
-        return self.__is_fetching
+    def done_fetching(self):
+        return self.__done_fetching
 
     @property
     def fetch_start_time(self):
@@ -48,16 +48,15 @@ class IThread:
 
         return False
 
-    def fetch_messages(self, *, verbose: bool = False, limit_date: datetime | None = None, handler=None, refetch: bool = False) -> list[IMessage]:
+    def fetch_messages(self, *, verbose: bool = False, limit_date: datetime | None = None, handler=None, use_stored: bool = False) -> list[IMessage]:
         if handler is None:
             handler = utils.request_handler
 
-        if len(self.__messages) > 0 and not refetch:
+        if use_stored:
             # Sort the messages
             self.__messages.sort(key=lambda m: m.timestamp)
             return self.__messages
 
-        self.__is_fetching = True
         self.__fetch_start_time = datetime.now()
 
         try:
@@ -98,11 +97,11 @@ class IThread:
                     self.__current_cursor = response["thread"]["prev_cursor"]
                 except KeyError:
                     self.__current_cursor = self.__oldest_cursor
-        except Exception as e:
-            self.__is_fetching = False
+        except BaseException as e:
+            self.__done_fetching = True
             raise e
 
-        self.__is_fetching = False
+        self.__done_fetching = True
 
         # Sort all messages by timestamp, from oldest to most recent
         self.__messages.sort(key=lambda m: m.timestamp)

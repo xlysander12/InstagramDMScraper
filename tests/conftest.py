@@ -3,12 +3,14 @@ import pytest
 import os
 import sys
 
-import utils.request_handler
-
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
+
+from utils import request_handler
+
 load_dotenv()
+
 
 @pytest.fixture
 def session_fixture():
@@ -17,8 +19,8 @@ def session_fixture():
         pytest.fail("SESSION_ID environment variable not set")
 
     # Set the session in the var
-    utils.request_handler.set_sessionid(sessionid)
+    request_handler.set_sessionid(sessionid)
     print("Session ID set for tests")
 
     # Return the module
-    return utils.request_handler
+    return request_handler

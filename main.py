@@ -36,7 +36,7 @@ def waiting_thread_function(thread: IThread.IThread):
         fetched_str: str = f"Fetched: {thread.num_of_messages}"
         requests_str: str = f"Requests: {request_handler.number_of_requests}"
         rate_str: str = f"Rate: {"{:.2f}".format(thread.num_of_messages / time_difference.total_seconds())} messages/second"
-        elapsed_time_str: str = f"Time: {hours}:{minutes}:{seconds}"
+        elapsed_time_str: str = f"Elapsed Time: {hours:02}:{minutes:02}:{seconds:02}"
 
         output: str = f"Status: RUNNING | " + " | ".join([fetched_str, requests_str, rate_str, elapsed_time_str])
 

@@ -26,7 +26,5 @@ jobs:
       - name: Install the project
         run: uv sync --locked --all-extras --dev
 
-      - name: Get Session ID
-
       - name: Run tests
         run: uv run pytest

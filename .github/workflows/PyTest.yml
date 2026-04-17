@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      TESTS_SESSIONID: ${{ secrets.TESTS_SESSIONID }}
+      TESTS_THREADID: ${{ secrets.TESTS_THREADID }}
 
     steps:
       - uses: actions/checkout@v6
@@ -22,6 +25,8 @@ jobs:
 
       - name: Install the project
         run: uv sync --locked --all-extras --dev
+
+      - name: Get Session ID
 
       - name: Run tests
         run: uv run pytest

@@ -17,7 +17,7 @@ Can be executed with no arguments, but also supports fully automated execution w
 - Download the source code (Either from releases or master branch)
 - Install the required dependencies
   - Using pip: `pip install -r requirements.txt`
-  - Using uv: `uv add -r requirements.txt` or just execute `main.py` with `uv run main.py`
+  - Using uv: `uv add -r requirements.txt` or just execute `uv sync`
 - Next, you need the `sessionid` of the account you're trying to scrape from. See the section below.
 - Once you have all that, just following the script's steps should get you where you need. You can also execute the main script with the `-h` or `--help` argument to learn more about executing with arguments.
 

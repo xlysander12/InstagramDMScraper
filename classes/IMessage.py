@@ -36,81 +36,141 @@ class IMessage:
 
             case "clip":
                 from classes.IClipMessage import IClipMessage
+                
+                clip = json_data.get("clip") or {}
+                clip_data = clip.get("clip") or {}
 
-                clip_data: dict = json_data["clip"]["clip"]
+                user = clip_data.get("user") or {}
+                caption = clip_data.get("caption") or {}
+                video_versions = clip_data.get("video_versions") or []
+
                 return IClipMessage(
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
-                    clip_data["user"]["username"],
-                    clip_data["caption"]["text"] if hasattr(clip_data, "caption") else None,
-                    clip_data["video_versions"][0]["url"]
+                    user.get("username", "Unknown"),
+                    caption.get("text"),
+                    video_versions[0].get("url", "") if len(video_versions) > 0 else ""
                 )
 
             case "story_share":
                 from classes.IStoryShareMessage import IStoryShareMessage
 
-                story_data: dict | None = None
-                try:
-                    story_data: dict = json_data["story_share"]["media"]
-                except KeyError:
-                    pass
+                story_share = json_data.get("story_share") or {}
+                story_data = story_share.get("media") or {}
+
+                user = story_data.get("user") or {}
+                caption = story_data.get("caption") or {}
+                video_versions = story_data.get("video_versions") or []
 
                 return IStoryShareMessage(
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
-                    story_data["user"]["username"] if story_data is not None and hasattr(story_data, "user") else None,
-                    story_data["caption"]["text"] if story_data is not None and hasattr(story_data, "caption") else None,
-                    story_data["video_versions"][0]["url"] if story_data is not None and hasattr(story_data, "video_versions") else None
+                    user.get("username"),
+                    caption.get("text"),
+                    video_versions[0].get("url", "") if len(video_versions) > 0 else None
                 )
 
             case "media_share":
                 from classes.IMediaShareMessage import IMediaShareMessage
 
-                media_data: dict = json_data["direct_media_share"]["media"]
+                direct_media_share = json_data.get("direct_media_share") or {}
+                media_data = direct_media_share.get("media") or {}
+
+                user = media_data.get("user") or {}
+                
+                url = ""
+                image_versions2 = media_data.get("image_versions2") or {}
+                candidates = image_versions2.get("candidates") or []
+                video_versions = media_data.get("video_versions") or []
+                carousel_media = media_data.get("carousel_media") or []
+                
+                if len(candidates) > 0:
+                    url = candidates[0].get("url", "")
+                elif len(video_versions) > 0:
+                    url = video_versions[0].get("url", "")
+                elif len(carousel_media) > 0:
+                    first_item = carousel_media[0] or {}
+                    item_image = first_item.get("image_versions2") or {}
+                    item_cands = item_image.get("candidates") or []
+                    item_video = first_item.get("video_versions") or []
+                    if len(item_cands) > 0:
+                        url = item_cands[0].get("url", "")
+                    elif len(item_video) > 0:
+                        url = item_video[0].get("url", "")
+
                 return IMediaShareMessage(
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
-                    media_data["user"]["username"] if hasattr(media_data, "user") else None,
-                    media_data["image_versions2"]["candidates"][0]["url"]
+                    user.get("username"),
+                    url
                 )
 
             case "raven_media":  # Temporary media
                 from classes.IRavenMediaMessage import IRavenMediaMessage
 
-                media_data: dict = json_data["raven_media"]
+                media_data = json_data.get("raven_media") or {}
+                
+                url = ""
+                image_versions2 = media_data.get("image_versions2") or {}
+                candidates = image_versions2.get("candidates") or []
+                video_versions = media_data.get("video_versions") or []
+
+                if media_data.get("media_type") == 1:
+                    if len(candidates) > 0:
+                        url = candidates[0].get("url", "")
+                else:
+                    if len(video_versions) > 0:
+                        url = video_versions[0].get("url", "")
+                
                 return IRavenMediaMessage(
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
-                    IMediaType.from_number(int(media_data["media_type"])),
-                    datetime.fromtimestamp(int(media_data["url_expire_at_secs"]) if media_data["url_expire_at_secs"] is not None else 0),
-                    media_data.get("image_versions2", {}).get("candidates", [{}])[0].get("url") if media_data["media_type"] == 1 else media_data.get("video_versions", [{}])[0].get("url")
+                    IMediaType.from_number(int(media_data.get("media_type", 0))),
+                    datetime.fromtimestamp(int(media_data.get("url_expire_at_secs", 0)) if media_data.get("url_expire_at_secs") is not None else 0),
+                    url
                 )
 
             case "media":  # Permanent media
                 from classes.IMediaMessage import IMediaMessage
 
-                media_data: dict = json_data["media"]
+                media_data = json_data.get("media") or {}
+                
+                url = ""
+                image_versions2 = media_data.get("image_versions2") or {}
+                candidates = image_versions2.get("candidates") or []
+                video_versions = media_data.get("video_versions") or []
+
+                if media_data.get("media_type") == 1:
+                    if len(candidates) > 0:
+                        url = candidates[0].get("url", "")
+                else:
+                    if len(video_versions) > 0:
+                        url = video_versions[0].get("url", "")
+
                 return IMediaMessage(
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
-                    IMediaType.from_number(int(media_data["media_type"])),
-                    media_data["image_versions2"]["candidates"][0]["url"] if media_data["media_type"] == 1 else media_data["video_versions"][0]["url"]
+                    IMediaType.from_number(int(media_data.get("media_type", 0))),
+                    url
                 )
 
             case "voice_media":
                 from classes.IVoiceMessage import IVoiceMessage
 
-                voice_data: dict = json_data["voice_media"]["media"]
+                voice_media = json_data.get("voice_media") or {}
+                voice_data = voice_media.get("media") or {}
+                audio = voice_data.get("audio") or {}
+
                 return IVoiceMessage(
                     int(json_data["item_id"]),
                     int(json_data["user_id"]),
                     datetime.fromtimestamp(int(json_data["timestamp"]) / 1000000),  # Instagram timestamps are in MICROSECONDS (no idea why)
-                    voice_data["audio"]["audio_src"]
+                    audio.get("audio_src", "")
                 )
 
             case _:

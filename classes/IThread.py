@@ -48,7 +48,7 @@ class IThread:
 
         return False
 
-    def fetch_messages(self, *, verbose: bool = False, limit_date: datetime | None = None, handler=None, use_stored: bool = False, chunk_callback = None) -> list[IMessage]:
+    def fetch_messages(self, *, verbose: bool = False, limit_date: datetime | None = None, handler=None, use_stored: bool = False, chunk_callback: collections.abc.Callable[[list[IMessage]], None] | None = None) -> list[IMessage]:
         if handler is None:
             handler = utils.request_handler
 

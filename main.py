@@ -78,17 +78,19 @@ def dump_messages(thread: IThread.IThread, verbose: bool, limit_date: datetime |
         with open(output_file, "w", encoding="utf-8") as f:
             pass
 
+    def format_messages(msgs: list) -> str:
+        formatted = ""
+        for msg in msgs:
+            author = thread.get_member_from_id(msg.sender_id)
+            author_name: str = f"{author.short_name} ({author.username})" if author is not None else "You"
+            formatted += f"{author_name}: {msg.print()} [{msg.timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n"
+        return formatted
+
     # Callback used to write messages in real-time as they arrive chunk-by-chunk
     def on_chunk(chunk):
         if output_file is not None:
-            dump = ""
-            for message in chunk:
-                author = thread.get_member_from_id(message.sender_id)
-                author_name: str = f"{author.short_name} ({author.username})" if author is not None else "You"
-                dump += f"{author_name}: {message.print()} [{message.timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n"
-            
             with open(output_file, "a", encoding="utf-8") as f:
-                f.write(dump)
+                f.write(format_messages(chunk))
 
     # Create thread used to display the progress, if verbose is disabled
     waiting_thread = None
@@ -115,12 +117,7 @@ def dump_messages(thread: IThread.IThread, verbose: bool, limit_date: datetime |
 
     # Build the message dump to stdout if NO output file was given
     if output_file is None:
-        dump = ""
-        for message in messages:
-            author = thread.get_member_from_id(message.sender_id)
-            author_name: str = f"{author.short_name} ({author.username})" if author is not None else "You"
-
-            dump += f"{author_name}: {message.print()}[{message.timestamp.strftime('%d/%m/%Y @ %H:%M:%S')}]\n"
+        dump = format_messages(messages)
 
         if waiting_thread is not None:
             while waiting_thread.is_alive():
@@ -129,7 +126,7 @@ def dump_messages(thread: IThread.IThread, verbose: bool, limit_date: datetime |
                 # Clear the first line of the output to ensure clean output
                 print(" " * 80, end="\r")
 
-        print(dump)
+        print(dump, end="")
     else:
         if waiting_thread is not None:
             while waiting_thread.is_alive():

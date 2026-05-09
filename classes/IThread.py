@@ -48,7 +48,7 @@ class IThread:
 
         return False
 
-    def fetch_messages(self, *, verbose: bool = False, limit_date: datetime | None = None, handler=None, use_stored: bool = False) -> list[IMessage]:
+    def fetch_messages(self, *, verbose: bool = False, limit_date: datetime | None = None, handler=None, use_stored: bool = False, chunk_callback: collections.abc.Callable[[list[IMessage]], None] | None = None) -> list[IMessage]:
         if handler is None:
             handler = utils.request_handler
 
@@ -62,15 +62,18 @@ class IThread:
         try:
             while True:
                 if verbose:
-                    print(colored(f"[*] Fetching messages for cursor {self.__current_cursor}", "blue"))
+                    print(colored(f"[*] Fetching messages for cursor {self.__current_cursor} (Currently fetched: {self.num_of_messages})", "blue"))
 
-                response: dict = handler.get_request(f"/threads/{self.id}?cursor={self.__current_cursor if self.__current_cursor is not None else ""}", verbose=verbose)
+                response: dict = handler.get_request(f"/threads/{self.id}?cursor={self.__current_cursor if self.__current_cursor is not None else ''}", verbose=verbose)
                 messages: list[dict] = response["thread"]["items"]
+                
+                chunk_messages = []
+                limit_reached = False
 
                 # For every fetched message, create the proper object
                 for message in messages:
                     # First, ensure the message is after the limit date if it exists
-                    if (limit_date is None) or (datetime.fromtimestamp(int(message["timestamp"]) / 1000000) > limit_date):  # Again, Instagram uses MICROSECONDS for timestamps
+                    if (limit_date is None) or (datetime.fromtimestamp(int(message["timestamp"]) / 1000000) > limit_date):  # Instagram uses MICROSECONDS for timestamps
                         # Create message object
                         message_object = IMessage.from_json(message)
 
@@ -80,15 +83,23 @@ class IThread:
                                 print(colored(f"[-] Repeated message... Moving on... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
                             continue
 
-                        self.__messages.append(IMessage.from_json(message))
+                        self.__messages.append(message_object)
+                        chunk_messages.append(message_object)
+                        
                         if verbose:
-                            print(colored(f"[+] Message is valid. Moving to next message... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "green"))
+                            print(colored(f"[+] Message is valid (Total Fetched: {self.num_of_messages}). Moving to next message... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "green"))
 
                     else:  # Limit date was reached. Break out of loop and return messages
                         if verbose:
                             print(colored(f"[-] Message timestamp is older than given limit. Canceling checks... [{datetime.now().strftime('%d/%m/%Y @ %H:%M:%S')}]", "red"))
-
+                        limit_reached = True
                         break
+
+                if chunk_callback and len(chunk_messages) > 0:
+                    chunk_callback(chunk_messages)
+                    
+                if limit_reached:
+                    break
 
                 if response["thread"]["prev_cursor"] == "MINCURSOR" or response["thread"]["prev_cursor"] == self.__oldest_cursor:
                     break
